@@ -6,23 +6,20 @@ window.uiManager = null;
 // Game configuration
 const gameConfig = {
   type: Phaser.AUTO,
-  width: GAME_CONSTANTS.MAP.WIDTH,
-  height: GAME_CONSTANTS.MAP.HEIGHT,
+  width: window.innerWidth,
+  height: window.innerHeight,
   parent: 'gameCanvas',
   backgroundColor: '#2d3436',
   physics: {
     default: 'arcade',
     arcade: {
       gravity: { y: 0 },
-      debug: false
     }
   },
   scene: GameScene,
   scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
-    width: GAME_CONSTANTS.MAP.WIDTH,
-    height: GAME_CONSTANTS.MAP.HEIGHT
+    mode: Phaser.Scale.RESIZE,
+    autoCenter: Phaser.Scale.CENTER_BOTH
   }
 };
 
@@ -36,8 +33,8 @@ window.initializeGame = function() {
 // Initialize UI on page load
 document.addEventListener('DOMContentLoaded', () => {
   console.log('🎮 Agawan Base - Game Loaded');
+  window.uiManager = new UIManager();
   
-  // Show mobile controls on touch devices
   const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
                    (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
   
@@ -45,17 +42,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.classList.add('mobile-device');
   }
   
-  // Focus username input
   const usernameInput = document.getElementById('usernameInput');
   if (usernameInput) {
     usernameInput.focus();
-  }
-});
-
-// Handle window resize
-window.addEventListener('resize', () => {
-  if (window.game) {
-    window.game.scale.refresh();
   }
 });
 

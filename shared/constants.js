@@ -18,19 +18,20 @@ const GAME_CONSTANTS = {
   },
   
   GAME_CONFIG: {
-    MAX_PLAYERS_PER_TEAM: 3,
-    WINNING_SCORE: 3,
+    MIN_PLAYERS_TO_START: 2,
+    MAX_PLAYERS_PER_TEAM: 5,
+    WINNING_SCORE: 5,
     GAME_DURATION: 300000, // 5 minutes in milliseconds
-    PLAYER_SPEED: 200,
+    PLAYER_SPEED: 220,
     PLAYER_SIZE: 32,
     BASE_SIZE: 150
   },
   
   MAP: {
-    WIDTH: 1200,
-    HEIGHT: 600,
-    RED_BASE: { x: 75, y: 300 },
-    BLUE_BASE: { x: 1125, y: 300 }
+    WIDTH: 1600,
+    HEIGHT: 800,
+    RED_BASE: { x: 100, y: 400 },
+    BLUE_BASE: { x: 1500, y: 400 }
   },
   
   POWERUPS: {

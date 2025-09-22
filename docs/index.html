@@ -58,13 +58,14 @@
 
             <div id="gameCanvas"></div>
             
-            <!-- Mobile Controls -->
             <div id="mobileControls" class="mobile-only">
                 <div id="joystick"></div>
                 <div id="actionButtons">
                     <button id="rescueBtn" class="action-btn">Rescue</button>
                 </div>
             </div>
+            
+            <div id="actionFeedback" class="hidden"></div>
         </div>
 
         <div id="gameOverScreen" class="screen hidden">
@@ -76,7 +77,6 @@
         </div>
     </div>
 
-    <!-- Scripts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.70.0/phaser.min.js"></script>
     <script src="../shared/constants.js"></script>

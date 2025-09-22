@@ -5,9 +5,7 @@
   "main": "server/server.js",
   "scripts": {
     "start": "node server/server.js",
-    "dev": "nodemon server/server.js",
-    "prepare-docs": "rm -rf docs && mkdir docs && cp -r client/* docs/",
-    "deploy-gh": "npm run prepare-docs && git add docs && git commit -m 'Update docs for GitHub Pages' && git push origin main"
+    "dev": "nodemon server/server.js"
   },
   "engines": {
     "node": ">=16.0.0"
@@ -20,7 +18,7 @@
   "devDependencies": {
     "nodemon": "^3.0.1"
   },
-  "keywords": ["game", "multiplayer", "nodejs", "socket.io"],
+  "keywords": ["game", "multiplayer", "nodejs", "socket.io", "phaser"],
   "author": "Your Name",
   "license": "MIT"
 }

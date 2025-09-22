@@ -17,9 +17,10 @@ class UIManager {
       chatType: document.getElementById('chatType'),
       gameOverTitle: document.getElementById('gameOverTitle'),
       gameOverStats: document.getElementById('gameOverStats'),
-      playAgainBtn: document.getElementById('playAgainBtn')
+      playAgainBtn: document.getElementById('playAgainBtn'),
+      actionFeedback: document.getElementById('actionFeedback'), // New UI element
     };
-    
+    this.feedbackTimeout = null;
     this.setupEventListeners();
   }
 
@@ -31,7 +32,6 @@ class UIManager {
         this.joinGame(username);
       }
     });
-    
     this.elements.usernameInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') {
         this.elements.joinGameBtn.click();
@@ -39,60 +39,40 @@ class UIManager {
     });
     
     // Chat
-    this.elements.sendMessageBtn.addEventListener('click', () => {
-      this.sendMessage();
-    });
-    
+    this.elements.sendMessageBtn.addEventListener('click', () => this.sendMessage());
     this.elements.messageInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') {
         this.sendMessage();
       }
     });
-    
-    // Play again
+
+    // Play again - reloads the page for a clean state
     this.elements.playAgainBtn.addEventListener('click', () => {
-      this.showScreen('loginScreen');
+      window.location.reload();
     });
   }
 
   async joinGame(username) {
-  try {
-    console.log("JoinGame called with username:", username);
-
-    if (!window.networkManager) {
-      console.log("Creating new NetworkManager...");
-      window.networkManager = new NetworkManager();
-      await window.networkManager.connect();
-      console.log("Connected to server");
+    try {
+      if (!window.networkManager) {
+        window.networkManager = new NetworkManager();
+        await window.networkManager.connect();
+      }
+      window.networkManager.joinGame(username);
+      this.showScreen('gameScreen');
+      if (window.initializeGame) {
+        window.initializeGame();
+      }
+    } catch (error) {
+      console.error('Failed to join game:', error);
+      alert('Failed to connect to the server. Please try again.');
     }
-
-    console.log("Joining game...");
-    window.networkManager.joinGame(username);
-
-    console.log("Switching screen...");
-    this.showScreen('gameScreen');
-
-    if (window.initializeGame) {
-      console.log("Initializing game...");
-      window.initializeGame();
-    } else {
-      console.warn("No initializeGame function found");
-    }
-
-  } catch (error) {
-    console.error('Failed to join game:', error);
-    alert('Failed to connect to server. Please try again.');
   }
-}
-
 
   showScreen(screenName) {
-    Object.keys(this.elements).forEach(key => {
-      if (key.endsWith('Screen')) {
-        this.elements[key].classList.add('hidden');
-      }
+    ['loginScreen', 'gameScreen', 'gameOverScreen'].forEach(id => {
+      this.elements[id].classList.add('hidden');
     });
-    
     this.elements[screenName].classList.remove('hidden');
   }
 
@@ -112,23 +92,22 @@ class UIManager {
     const bluePlayers = players.filter(p => p.team === GAME_CONSTANTS.TEAMS.BLUE);
     
     this.elements.redPlayers.innerHTML = '';
-    this.elements.bluePlayers.innerHTML = '';
-    
     redPlayers.forEach(player => {
       const li = document.createElement('li');
       li.textContent = `${player.username} (${player.score})`;
       if (player.state === GAME_CONSTANTS.PLAYER_STATES.FROZEN) {
-        li.style.opacity = '0.5';
+        li.classList.add('frozen');
         li.textContent += ' 🧊';
       }
       this.elements.redPlayers.appendChild(li);
     });
-    
+
+    this.elements.bluePlayers.innerHTML = '';
     bluePlayers.forEach(player => {
       const li = document.createElement('li');
       li.textContent = `${player.username} (${player.score})`;
       if (player.state === GAME_CONSTANTS.PLAYER_STATES.FROZEN) {
-        li.style.opacity = '0.5';
+        li.classList.add('frozen');
         li.textContent += ' 🧊';
       }
       this.elements.bluePlayers.appendChild(li);
@@ -137,32 +116,27 @@ class UIManager {
 
   addChatMessage(messageData) {
     const messageDiv = document.createElement('div');
-    messageDiv.className = `chat-message ${messageData.type} ${messageData.team}`;
-    
+    messageDiv.className = `chat-message ${messageData.type} ${messageData.team || ''}`;
     const timestamp = new Date(messageData.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const typePrefix = messageData.type === 'team' ? '[TEAM] ' : '';
     
     messageDiv.innerHTML = `
       <span class="timestamp">[${timestamp}]</span>
       ${typePrefix}
-      <span class="username">${messageData.username}:</span>
+      <span class="username">${this.escapeHtml(messageData.username)}:</span>
       <span class="message">${this.escapeHtml(messageData.message)}</span>
     `;
-    
     this.elements.chatMessages.appendChild(messageDiv);
     this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
     
-    // Remove old messages (keep last 50)
-    const messages = this.elements.chatMessages.children;
-    if (messages.length > 50) {
-      messages[0].remove();
+    while (this.elements.chatMessages.children.length > 50) {
+      this.elements.chatMessages.children[0].remove();
     }
   }
 
   sendMessage() {
     const message = this.elements.messageInput.value.trim();
     const type = this.elements.chatType.value;
-    
     if (message && window.networkManager) {
       window.networkManager.sendChatMessage(message, type);
       this.elements.messageInput.value = '';
@@ -171,33 +145,23 @@ class UIManager {
 
   showGameOver(gameOverData) {
     const { winner, finalScores, playerStats } = gameOverData;
-    
-    // Show winner
     if (winner) {
       this.elements.gameOverTitle.textContent = `${winner.toUpperCase()} TEAM WINS!`;
-      this.elements.gameOverTitle.style.color = winner === 'red' ? '#ff4757' : '#5352ed';
+      this.elements.gameOverTitle.className = winner === 'red' ? 'red-team' : 'blue-team';
     } else {
       this.elements.gameOverTitle.textContent = 'GAME TIED!';
-      this.elements.gameOverTitle.style.color = '#333';
+      this.elements.gameOverTitle.className = '';
     }
     
-    // Show stats
-    let statsHtml = `
-      <div class="winner-announcement">
-        Final Score: Red ${finalScores.red} - ${finalScores.blue} Blue
-      </div>
-      <h3>Player Statistics</h3>
-    `;
-    
+    let statsHtml = `<div class="final-score">Final Score: <span class="red-team">${finalScores.red}</span> - <span class="blue-team">${finalScores.blue}</span></div><h3>Player Statistics</h3>`;
     playerStats.sort((a, b) => b.score - a.score).forEach(player => {
       statsHtml += `
         <div class="stat-row">
-          <span style="color: ${player.team === 'red' ? '#ff4757' : '#5352ed'}">${player.username}</span>
+          <span class="${player.team}-team">${this.escapeHtml(player.username)}</span>
           <span>Score: ${player.score} | Tags: ${player.tags} | Rescues: ${player.rescues}</span>
         </div>
       `;
     });
-    
     this.elements.gameOverStats.innerHTML = statsHtml;
     this.showScreen('gameOverScreen');
   }
@@ -206,5 +170,18 @@ class UIManager {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  // **NEW**: Method to show feedback messages
+  showActionFeedback(message) {
+    if (this.feedbackTimeout) {
+      clearTimeout(this.feedbackTimeout);
+    }
+    const feedbackEl = this.elements.actionFeedback;
+    feedbackEl.textContent = message;
+    feedbackEl.classList.remove('hidden');
+    this.feedbackTimeout = setTimeout(() => {
+      feedbackEl.classList.add('hidden');
+    }, 1500);
   }
 }

@@ -6,10 +6,9 @@ class NetworkManager {
   }
 
   connect() {
-    // Dynamic backend URL
     const serverUrl = window.location.hostname.includes("github.io")
-      ? "https://agawan-base.onrender.com" // Render backend
-      : "http://localhost:3000";           // Local backend
+      ? "https://agawan-base.onrender.com" // Assumes a Render backend
+      : `http://${window.location.hostname}:3000`; // Local backend
 
     return new Promise((resolve, reject) => {
       this.socket = io(serverUrl, { withCredentials: true });
@@ -23,6 +22,7 @@ class NetworkManager {
       this.socket.on('disconnect', () => {
         console.log('Disconnected from server');
         this.isConnected = false;
+        alert('You have been disconnected from the server.');
       });
 
       this.socket.on('connect_error', (error) => {
@@ -37,17 +37,10 @@ class NetworkManager {
 
   setupEventHandlers() {
     const events = [
-      'playerJoined',
-      'playerLeft', 
-      'playerMoved',
-      'playerTagged',
-      'playerRescued',
-      'scoreUpdate',
-      'gameStarted',
-      'gameOver',
-      'chatMessage',
-      'powerupSpawned',
-      'powerupCollected'
+      'playerJoined', 'playerLeft', 'playerMoved', 'playerTagged',
+      'playerRescued', 'scoreUpdate', 'gameStarted', 'gameOver',
+      'chatMessage', 'powerupSpawned', 'powerupCollected',
+      'playerStateChanged' // New event
     ];
     
     events.forEach(event => {
@@ -56,6 +49,12 @@ class NetworkManager {
           this.callbacks.get(event).forEach(callback => callback(data));
         }
       });
+    });
+
+    // **NEW**: Generic error handler from server
+    this.socket.on('serverError', (data) => {
+      console.error('Server error:', data.message);
+      alert(`Server error: ${data.message}`);
     });
   }
 
@@ -69,11 +68,13 @@ class NetworkManager {
   emit(event, data) {
     if (this.socket && this.isConnected) {
       this.socket.emit(event, data);
+    } else {
+      console.error(`Socket not connected. Cannot emit event '${event}'`);
     }
   }
 
-  joinGame(username, roomId) {
-    this.emit('joinGame', { username, roomId });
+  joinGame(username) {
+    this.emit('joinGame', { username });
   }
 
   updatePosition(x, y) {

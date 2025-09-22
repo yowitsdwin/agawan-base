@@ -14,7 +14,7 @@ class Player {
     this.tags = 0;
     this.rescues = 0;
     this.powerups = new Set();
-    this.lastUpdate = Date.now();
+    this.lastUpdate = Date.now(); // **NEW**: For movement validation
   }
 
   setTeam(team) {
@@ -38,15 +38,11 @@ class Player {
   updatePosition(x, y) {
     this.x = x;
     this.y = y;
-    this.lastUpdate = Date.now();
-    
-    // Check if player is leaving base
     this.checkBaseExit();
   }
 
   checkBaseExit() {
     const isInOwnBase = this.isInBase(this.team);
-    
     if (this.state === CONSTANTS.PLAYER_STATES.IN_BASE && !isInOwnBase) {
       this.state = CONSTANTS.PLAYER_STATES.ACTIVE;
       this.baseExitTime = Date.now();
@@ -57,24 +53,15 @@ class Player {
   }
 
   isInBase(team) {
-    const basePos = team === CONSTANTS.TEAMS.RED ? 
-      CONSTANTS.MAP.RED_BASE : CONSTANTS.MAP.BLUE_BASE;
-    
-    const distance = Math.sqrt(
-      Math.pow(this.x - basePos.x, 2) + 
-      Math.pow(this.y - basePos.y, 2)
-    );
-    
+    const basePos = team === CONSTANTS.TEAMS.RED ? CONSTANTS.MAP.RED_BASE : CONSTANTS.MAP.BLUE_BASE;
+    const distance = Math.sqrt(Math.pow(this.x - basePos.x, 2) + Math.pow(this.y - basePos.y, 2));
     return distance <= CONSTANTS.GAME_CONFIG.BASE_SIZE / 2;
   }
 
   canTag(otherPlayer) {
-    // Can only tag if both players are active and from different teams
     if (this.team === otherPlayer.team) return false;
-    if (this.state !== CONSTANTS.PLAYER_STATES.ACTIVE) return false;
-    if (otherPlayer.state !== CONSTANTS.PLAYER_STATES.ACTIVE) return false;
-    
-    // Later leaver can tag earlier leaver
+    if (this.state !== CONSTANTS.PLAYER_STATES.ACTIVE || otherPlayer.state !== CONSTANTS.PLAYER_STATES.ACTIVE) return false;
+    // The player who left their base more recently can tag the other
     return this.baseExitTime > otherPlayer.baseExitTime;
   }
 
@@ -86,25 +73,14 @@ class Player {
     this.state = CONSTANTS.PLAYER_STATES.ACTIVE;
   }
 
-  addPowerup(powerup) {
-    this.powerups.add(powerup);
-  }
-
-  removePowerup(powerup) {
-    this.powerups.delete(powerup);
-  }
+  addPowerup(powerup) { this.powerups.add(powerup); }
+  removePowerup(powerup) { this.powerups.delete(powerup); }
 
   getState() {
     return {
-      id: this.id,
-      username: this.username,
-      team: this.team,
-      x: this.x,
-      y: this.y,
-      state: this.state,
-      score: this.score,
-      tags: this.tags,
-      rescues: this.rescues,
+      id: this.id, username: this.username, team: this.team,
+      x: this.x, y: this.y, state: this.state, score: this.score,
+      tags: this.tags, rescues: this.rescues,
       powerups: Array.from(this.powerups)
     };
   }

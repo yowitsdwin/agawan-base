@@ -8,257 +8,166 @@ class GameScene extends Phaser.Scene {
   }
 
   preload() {
-    // Create colored rectangles for sprites (placeholder)
-    this.load.image('redPlayer', 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
-    
-    // Create colored rectangles programmatically
+    // Programmatically create textures to avoid loading assets
     this.createColoredTextures();
   }
 
   createColoredTextures() {
+    const size = GAME_CONSTANTS.GAME_CONFIG.PLAYER_SIZE;
     // Red player
-    this.add.graphics()
-      .fillStyle(0xff4757)
-      .fillRect(0, 0, 32, 32)
-      .generateTexture('redPlayer', 32, 32)
-      .destroy();
-    
-    // Blue player  
-    this.add.graphics()
-      .fillStyle(0x5352ed)
-      .fillRect(0, 0, 32, 32)
-      .generateTexture('bluePlayer', 32, 32)
-      .destroy();
-    
+    this.add.graphics().fillStyle(0xff4757).fillRect(0, 0, size, size).generateTexture('redPlayer', size, size).destroy();
+    // Blue player
+    this.add.graphics().fillStyle(0x5352ed).fillRect(0, 0, size, size).generateTexture('bluePlayer', size, size).destroy();
     // Frozen player
-    this.add.graphics()
-      .fillStyle(0x74b9ff)
-      .fillRect(0, 0, 32, 32)
-      .generateTexture('frozenPlayer', 32, 32)
-      .destroy();
-    
-    // Powerups
-    this.add.graphics()
-      .fillStyle(0xffeaa7)
-      .fillCircle(16, 16, 16)
-      .generateTexture('powerup', 32, 32)
-      .destroy();
+    this.add.graphics().fillStyle(0x74b9ff).fillRect(0, 0, size, size).generateTexture('frozenPlayer', size, size).destroy();
+    // Powerup
+    this.add.graphics().fillStyle(0xffeaa7).fillCircle(16, 16, 16).generateTexture('powerup', 32, 32).destroy();
   }
 
   create() {
-    // Set world bounds
     this.physics.world.setBounds(0, 0, GAME_CONSTANTS.MAP.WIDTH, GAME_CONSTANTS.MAP.HEIGHT);
-    
-    // Create background
-    this.add.rectangle(GAME_CONSTANTS.MAP.WIDTH / 2, GAME_CONSTANTS.MAP.HEIGHT / 2, 
-                      GAME_CONSTANTS.MAP.WIDTH, GAME_CONSTANTS.MAP.HEIGHT, 0x2d3436);
-    
-    // Create bases
+    this.add.rectangle(GAME_CONSTANTS.MAP.WIDTH / 2, GAME_CONSTANTS.MAP.HEIGHT / 2, GAME_CONSTANTS.MAP.WIDTH, GAME_CONSTANTS.MAP.HEIGHT, 0x2d3436);
     this.createBases();
     
-    // Setup controls
     this.controls = new Controls(this);
-    
-    // Setup network event listeners
     this.setupNetworkListeners();
     
-    // Create UI manager
-    window.uiManager = new UIManager();
-    
-    // Start game loop
-    this.startGameLoop();
+    // The UIManager is now created on DOMContentLoaded in main.js
+    this.time.addEvent({ delay: 16, callback: this.gameLoop, callbackScope: this, loop: true });
   }
 
   createBases() {
+    const baseTextStyle = { fontSize: '20px', align: 'center', stroke: '#000', strokeThickness: 2 };
     // Red base
-    this.add.circle(GAME_CONSTANTS.MAP.RED_BASE.x, GAME_CONSTANTS.MAP.RED_BASE.y, 
-                   GAME_CONSTANTS.GAME_CONFIG.BASE_SIZE / 2, 0xff4757, 0.3)
-        .setStrokeStyle(4, 0xff4757);
-    
-    this.add.text(GAME_CONSTANTS.MAP.RED_BASE.x, GAME_CONSTANTS.MAP.RED_BASE.y, 'RED\nBASE', {
-      fontSize: '20px',
-      fill: '#ff4757',
-      align: 'center'
-    }).setOrigin(0.5);
-    
+    this.add.circle(GAME_CONSTANTS.MAP.RED_BASE.x, GAME_CONSTANTS.MAP.RED_BASE.y, GAME_CONSTANTS.GAME_CONFIG.BASE_SIZE / 2, 0xff4757, 0.3).setStrokeStyle(4, 0xff4757);
+    this.add.text(GAME_CONSTANTS.MAP.RED_BASE.x, GAME_CONSTANTS.MAP.RED_BASE.y, 'RED\nBASE', { ...baseTextStyle, fill: '#ff4757' }).setOrigin(0.5);
     // Blue base
-    this.add.circle(GAME_CONSTANTS.MAP.BLUE_BASE.x, GAME_CONSTANTS.MAP.BLUE_BASE.y, 
-                   GAME_CONSTANTS.GAME_CONFIG.BASE_SIZE / 2, 0x5352ed, 0.3)
-        .setStrokeStyle(4, 0x5352ed);
-    
-    this.add.text(GAME_CONSTANTS.MAP.BLUE_BASE.x, GAME_CONSTANTS.MAP.BLUE_BASE.y, 'BLUE\nBASE', {
-      fontSize: '20px',
-      fill: '#5352ed',
-      align: 'center'
-    }).setOrigin(0.5);
-    
+    this.add.circle(GAME_CONSTANTS.MAP.BLUE_BASE.x, GAME_CONSTANTS.MAP.BLUE_BASE.y, GAME_CONSTANTS.GAME_CONFIG.BASE_SIZE / 2, 0x5352ed, 0.3).setStrokeStyle(4, 0x5352ed);
+    this.add.text(GAME_CONSTANTS.MAP.BLUE_BASE.x, GAME_CONSTANTS.MAP.BLUE_BASE.y, 'BLUE\nBASE', { ...baseTextStyle, fill: '#5352ed' }).setOrigin(0.5);
     // Center line
-    this.add.line(GAME_CONSTANTS.MAP.WIDTH / 2, GAME_CONSTANTS.MAP.HEIGHT / 2,
-                 0, 0, 0, GAME_CONSTANTS.MAP.HEIGHT, 0xffffff, 0.3)
-        .setLineWidth(2);
+    this.add.line(0, 0, GAME_CONSTANTS.MAP.WIDTH / 2, 0, GAME_CONSTANTS.MAP.WIDTH / 2, GAME_CONSTANTS.MAP.HEIGHT, 0xffffff, 0.5).setOrigin(0,0);
   }
 
   setupNetworkListeners() {
     if (!window.networkManager) return;
-    
-    window.networkManager.on('playerJoined', (data) => {
-      this.updateGameState(data.roomState);
-      
-      // Set local player if it's us
-      if (!this.localPlayer && data.player.id === window.networkManager.socket.id) {
-        this.localPlayer = data.player;
-      }
-    });
-    
-    window.networkManager.on('playerMoved', (data) => {
-      this.updatePlayerPosition(data.playerId, data.x, data.y, data.state);
-    });
-    
-    window.networkManager.on('playerTagged', (data) => {
-      this.handlePlayerTagged(data.tagger, data.tagged);
-    });
-    
-    window.networkManager.on('playerRescued', (data) => {
-      this.handlePlayerRescued(data.rescuer, data.rescued);
-    });
-    
+
+    window.networkManager.on('gameStarted', (data) => this.updateGameState(data.roomState));
+    window.networkManager.on('playerJoined', (data) => this.updateGameState(data.roomState));
+    window.networkManager.on('playerLeft', (data) => this.removePlayer(data.playerId));
+    window.networkManager.on('gameOver', (data) => window.uiManager.showGameOver(data));
     window.networkManager.on('scoreUpdate', (data) => {
       window.uiManager.updateScores(data.teamScores);
       this.showScoreNotification(data.scorer);
     });
-    
-    window.networkManager.on('gameStarted', (data) => {
-      this.updateGameState(data.roomState);
-    });
-    
-    window.networkManager.on('gameOver', (data) => {
-      window.uiManager.showGameOver(data);
-    });
-    
-    window.networkManager.on('chatMessage', (data) => {
-      window.uiManager.addChatMessage(data);
-    });
-    
-    window.networkManager.on('powerupSpawned', (data) => {
-      this.spawnPowerup(data);
-    });
-    
-    window.networkManager.on('powerupCollected', (data) => {
-      this.removePowerup(data.powerupId);
+    window.networkManager.on('playerMoved', (data) => this.updatePlayerPosition(data.playerId, data.x, data.y));
+    window.networkManager.on('playerTagged', (data) => this.handlePlayerTagged(data.tagger, data.tagged));
+    window.networkManager.on('playerRescued', (data) => this.handlePlayerRescued(data.rescuer, data.rescued));
+    window.networkManager.on('chatMessage', (data) => window.uiManager.addChatMessage(data));
+    window.networkManager.on('powerupSpawned', (data) => this.spawnPowerup(data));
+    window.networkManager.on('powerupCollected', (data) => this.removePowerup(data.powerupId));
+
+    // **NEW**: Dedicated listener for state changes
+    window.networkManager.on('playerStateChanged', (data) => {
+      const sprite = this.players.get(data.playerId);
+      if (sprite) {
+        sprite.playerData.state = data.state;
+        sprite.setTexture(this.getPlayerTexture(sprite.playerData));
+        window.uiManager.updatePlayerList(Array.from(this.players.values()).map(s => s.playerData)); // Refresh UI
+      }
     });
   }
 
   updateGameState(roomState) {
-    // Update players
-    this.updatePlayers(roomState.players);
-    
-    // Update UI
-    window.uiManager.updateScores(roomState.teamScores);
-    window.uiManager.updateTimer(roomState.timeRemaining);
-    window.uiManager.updatePlayerList(roomState.players);
-  }
-
-  updatePlayers(playersData) {
-    // Remove players that left
     this.players.forEach((sprite, playerId) => {
-      if (!playersData.find(p => p.id === playerId)) {
-        sprite.destroy();
-        this.players.delete(playerId);
+      if (!roomState.players.find(p => p.id === playerId)) {
+        this.removePlayer(playerId);
       }
     });
-    
-    // Add or update players
-    playersData.forEach(playerData => {
+    roomState.players.forEach(playerData => {
       if (!this.players.has(playerData.id)) {
         this.createPlayerSprite(playerData);
       } else {
         this.updatePlayerSprite(playerData);
       }
     });
+
+    if (!this.localPlayer && window.networkManager?.socket?.id) {
+        const localData = roomState.players.find(p => p.id === window.networkManager.socket.id);
+        if(localData) this.localPlayer = localData;
+    }
+    
+    window.uiManager.updateScores(roomState.teamScores);
+    window.uiManager.updateTimer(roomState.timeRemaining);
+    window.uiManager.updatePlayerList(roomState.players);
+  }
+
+  removePlayer(playerId) {
+    const sprite = this.players.get(playerId);
+    if (sprite) {
+      sprite.nameText.destroy();
+      sprite.destroy();
+      this.players.delete(playerId);
+      window.uiManager.updatePlayerList(Array.from(this.players.values()).map(s => s.playerData));
+    }
   }
 
   createPlayerSprite(playerData) {
-    const texture = this.getPlayerTexture(playerData);
-    const sprite = this.physics.add.sprite(playerData.x, playerData.y, texture);
-    
-    sprite.setDisplaySize(GAME_CONSTANTS.GAME_CONFIG.PLAYER_SIZE, GAME_CONSTANTS.GAME_CONFIG.PLAYER_SIZE);
+    const isLocal = playerData.id === window.networkManager?.socket?.id;
+    const sprite = this.physics.add.sprite(playerData.x, playerData.y, this.getPlayerTexture(playerData));
     sprite.setCollideWorldBounds(true);
     
-    // Add username text
-    const nameText = this.add.text(playerData.x, playerData.y - 20, playerData.username, {
+    const nameText = this.add.text(0, -20, playerData.username, {
       fontSize: '12px',
-      fill: playerData.team === GAME_CONSTANTS.TEAMS.RED ? '#ff4757' : '#5352ed',
+      fill: isLocal ? '#ffff00' : '#ffffff',
       stroke: '#000000',
-      strokeThickness: 2
+      strokeThickness: 3
     }).setOrigin(0.5);
     
-    sprite.nameText = nameText;
-    sprite.playerData = playerData;
+    const container = this.add.container(playerData.x, playerData.y, [sprite, nameText]);
+    container.setSize(sprite.width, sprite.height);
+    this.physics.world.enable(container);
+    container.body.setCollideWorldBounds(true);
     
-    this.players.set(playerData.id, sprite);
+    container.sprite = sprite;
+    container.nameText = nameText;
+    container.playerData = playerData;
     
-    // Set as local player if it's us
-    if (playerData.id === window.networkManager?.socket?.id) {
+    this.players.set(playerData.id, container);
+    
+    if (isLocal) {
       this.localPlayer = playerData;
-      this.cameras.main.startFollow(sprite, true, 0.1, 0.1);
+      this.cameras.main.startFollow(container, true, 0.1, 0.1);
     }
   }
 
   updatePlayerSprite(playerData) {
-    const sprite = this.players.get(playerData.id);
-    if (!sprite) return;
-    
-    // Update texture based on state
-    const newTexture = this.getPlayerTexture(playerData);
-    if (sprite.texture.key !== newTexture) {
-      sprite.setTexture(newTexture);
-    }
-    
-    // Update position (smooth interpolation for remote players)
+    const container = this.players.get(playerData.id);
+    if (!container) return;
+
+    container.playerData = playerData; // Always update data
+    container.sprite.setTexture(this.getPlayerTexture(playerData));
+
     if (playerData.id !== this.localPlayer?.id) {
       this.tweens.add({
-        targets: sprite,
+        targets: container,
         x: playerData.x,
         y: playerData.y,
-        duration: 100,
-        ease: 'Linear'
-      });
-      
-      this.tweens.add({
-        targets: sprite.nameText,
-        x: playerData.x,
-        y: playerData.y - 20,
-        duration: 100,
+        duration: 100, // Smoothing duration
         ease: 'Linear'
       });
     }
-    
-    sprite.playerData = playerData;
   }
 
-  updatePlayerPosition(playerId, x, y, state) {
-    if (playerId === this.localPlayer?.id) return; // Don't update local player from network
-    
-    const sprite = this.players.get(playerId);
-    if (sprite) {
+  updatePlayerPosition(playerId, x, y) {
+    if (playerId === this.localPlayer?.id) return; // Ignore updates for self
+    const container = this.players.get(playerId);
+    if (container) {
       this.tweens.add({
-        targets: sprite,
-        x: x,
-        y: y,
+        targets: container,
+        x: x, y: y,
         duration: 100,
         ease: 'Linear'
       });
-      
-      this.tweens.add({
-        targets: sprite.nameText,
-        x: x,
-        y: y - 20,
-        duration: 100,
-        ease: 'Linear'
-      });
-      
-      sprite.playerData.state = state;
-      sprite.setTexture(this.getPlayerTexture(sprite.playerData));
     }
   }
 
@@ -271,52 +180,36 @@ class GameScene extends Phaser.Scene {
 
   handlePlayerTagged(tagger, tagged) {
     this.showNotification(`${tagged.username} tagged by ${tagger.username}!`, 'tag');
-    
-    // Visual effect
     const taggedSprite = this.players.get(tagged.id);
     if (taggedSprite) {
-      this.tweens.add({
-        targets: taggedSprite,
-        scaleX: 1.2,
-        scaleY: 1.2,
-        duration: 200,
-        yoyo: true,
-        ease: 'Power2'
-      });
+      this.cameras.main.flash(200, 255, 0, 0); // Red flash
     }
   }
 
   handlePlayerRescued(rescuer, rescued) {
     this.showNotification(`${rescued.username} rescued by ${rescuer.username}!`, 'rescue');
-    
-    // Visual effect
-    const rescuedSprite = this.players.get(rescued.id);
-    if (rescuedSprite) {
-      const particles = this.add.particles(rescuedSprite.x, rescuedSprite.y, 'powerup', {
-        speed: { min: 50, max: 100 },
-        lifespan: 500,
-        quantity: 5
-      });
-      
-      this.time.delayedCall(500, () => particles.destroy());
-    }
+  }
+  
+  showNotification(message, type) {
+    const color = type === 'tag' ? '#ff4757' : type === 'rescue' ? '#2ed573' : '#ffa502';
+    const notification = this.add.text(this.cameras.main.width / 2, 50, message, {
+      fontSize: '24px', fill: color, stroke: '#000', strokeThickness: 4
+    }).setOrigin(0.5).setScrollFactor(0);
+
+    this.tweens.add({
+      targets: notification, y: 30, alpha: 0, duration: 2500, ease: 'Power2',
+      onComplete: () => notification.destroy()
+    });
+  }
+
+  showScoreNotification(scorer) {
+    this.showNotification(`${scorer.username} scored for the ${scorer.team.toUpperCase()} team!`, 'score');
   }
 
   spawnPowerup(powerupData) {
     const sprite = this.physics.add.sprite(powerupData.x, powerupData.y, 'powerup');
-    sprite.setDisplaySize(24, 24);
     sprite.powerupData = powerupData;
-    
-    // Floating animation
-    this.tweens.add({
-      targets: sprite,
-      y: powerupData.y - 10,
-      duration: 1000,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut'
-    });
-    
+    this.tweens.add({ targets: sprite, y: sprite.y - 10, duration: 1000, yoyo: true, repeat: -1 });
     this.powerups.set(powerupData.id, sprite);
   }
 
@@ -328,106 +221,39 @@ class GameScene extends Phaser.Scene {
     }
   }
 
-  showNotification(message, type) {
-    const color = type === 'tag' ? '#ff4757' : type === 'rescue' ? '#00b894' : '#ffeaa7';
-    
-    const notification = this.add.text(GAME_CONSTANTS.MAP.WIDTH / 2, 100, message, {
-      fontSize: '18px',
-      fill: color,
-      stroke: '#000000',
-      strokeThickness: 2
-    }).setOrigin(0.5).setScrollFactor(0);
-    
-    this.tweens.add({
-      targets: notification,
-      y: 80,
-      alpha: 0,
-      duration: 2000,
-      ease: 'Power2',
-      onComplete: () => notification.destroy()
-    });
-  }
-
-  showScoreNotification(scorer) {
-    this.showNotification(`${scorer.username} scored for ${scorer.team.toUpperCase()} team!`, 'score');
-  }
-
-  startGameLoop() {
-    // Update local player movement
-    this.physics.world.on('worldstep', () => {
-      if (this.localPlayer && this.controls) {
-        const movement = this.controls.getMovement();
-        const localSprite = this.players.get(this.localPlayer.id);
-        
-        if (localSprite && (movement.x !== 0 || movement.y !== 0)) {
-          const speed = GAME_CONSTANTS.GAME_CONFIG.PLAYER_SPEED;
-          localSprite.setVelocity(movement.x * speed, movement.y * speed);
-          
-          // Update local player data
-          this.localPlayer.x = localSprite.x;
-          this.localPlayer.y = localSprite.y;
-          
-          // Send position update to server
-          window.networkManager?.updatePosition(localSprite.x, localSprite.y);
-          
-          // Update name text position
-          if (localSprite.nameText) {
-            localSprite.nameText.setPosition(localSprite.x, localSprite.y - 20);
-          }
-        } else if (localSprite) {
-          localSprite.setVelocity(0, 0);
-        }
-      }
-    });
-    
-    // Check powerup collection
-    this.time.addEvent({
-      delay: 100,
-      callback: this.checkPowerupCollection,
-      callbackScope: this,
-      loop: true
-    });
-  }
-
-  checkPowerupCollection() {
-    if (!this.localPlayer) return;
-    
-    const localSprite = this.players.get(this.localPlayer.id);
-    if (!localSprite) return;
-    
-    this.powerups.forEach((powerupSprite, powerupId) => {
-      const distance = Phaser.Math.Distance.Between(
-        localSprite.x, localSprite.y,
-        powerupSprite.x, powerupSprite.y
-      );
-      
-      if (distance < 30) {
-        window.networkManager?.collectPowerup(powerupId);
-      }
-    });
-  }
-
   findNearbyPlayers(centerPlayer, radius) {
-    const nearbyPlayers = [];
-    
-    this.players.forEach((sprite, playerId) => {
+    const nearby = [];
+    this.players.forEach((container, playerId) => {
       if (playerId !== centerPlayer.id) {
-        const distance = Phaser.Math.Distance.Between(
-          centerPlayer.x, centerPlayer.y,
-          sprite.x, sprite.y
-        );
-        
-        if (distance <= radius) {
-          nearbyPlayers.push(sprite.playerData);
+        const dist = Phaser.Math.Distance.Between(centerPlayer.x, centerPlayer.y, container.x, container.y);
+        if (dist <= radius) {
+          nearby.push(container.playerData);
         }
       }
     });
-    
-    return nearbyPlayers;
+    return nearby;
   }
+  
+  gameLoop() {
+    if (!this.localPlayer) return;
+    const localContainer = this.players.get(this.localPlayer.id);
+    if (!localContainer) return;
+    
+    // Player Movement
+    const movement = this.controls.getMovement();
+    const speed = GAME_CONSTANTS.GAME_CONFIG.PLAYER_SPEED;
+    localContainer.body.setVelocity(movement.x * speed, movement.y * speed);
 
-  update() {
-    // Game update logic runs here
-    // Most logic is handled by event-driven network updates
+    if (localContainer.body.velocity.x !== 0 || localContainer.body.velocity.y !== 0) {
+      this.localPlayer.x = localContainer.x;
+      this.localPlayer.y = localContainer.y;
+      window.networkManager?.updatePosition(localContainer.x, localContainer.y);
+    }
+    
+    // Powerup Collection Check
+    this.physics.overlap(localContainer, Array.from(this.powerups.values()), (playerContainer, powerupSprite) => {
+      window.networkManager?.collectPowerup(powerupSprite.powerupData.id);
+      this.removePowerup(powerupSprite.powerupData.id); // Immediately remove on client for responsiveness
+    });
   }
 }

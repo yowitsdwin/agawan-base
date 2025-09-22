@@ -5,7 +5,7 @@ class NetworkManager {
     this.callbacks = new Map();
   }
 
-  connect(serverUrl = window.location.origin) {
+  connect(serverUrl = "https://agawan-base.onrender.com") {
     return new Promise((resolve, reject) => {
       this.socket = io(serverUrl);
       

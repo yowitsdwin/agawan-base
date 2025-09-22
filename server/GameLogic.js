@@ -5,14 +5,13 @@ class GameLogic {
     this.room = room;
   }
 
+  // Check for collisions between all active players
   checkCollisions() {
-    const activePlayers = Array.from(this.room.players.values())
-      .filter(p => p.state === CONSTANTS.PLAYER_STATES.ACTIVE);
-    for (let i = 0; i < activePlayers.length; i++) {
-      for (let j = i + 1; j < activePlayers.length; j++) {
-        const player1 = activePlayers[i];
-        const player2 = activePlayers[j];
-
+    const players = Array.from(this.room.players.values());
+    for (let i = 0; i < players.length; i++) {
+      for (let j = i + 1; j < players.length; j++) {
+        const player1 = players[i];
+        const player2 = players[j];
         if (this.isColliding(player1, player2)) {
           this.handleCollision(player1, player2);
         }
@@ -20,12 +19,13 @@ class GameLogic {
     }
   }
 
-  isColliding(player1, player2) {
-    const distance = Math.hypot(player1.x - player2.x, player1.y - player2.y);
-    return distance <= CONSTANTS.GAME_CONFIG.PLAYER_SIZE;
+  isColliding(p1, p2) {
+    return Math.hypot(p1.x - p2.x, p1.y - p2.y) <= CONSTANTS.GAME_CONFIG.PLAYER_SIZE;
   }
 
+  // Handle a collision based on game rules
   handleCollision(player1, player2) {
+    // Determine who can tag whom
     if (player1.canTag(player2)) {
       this.tagPlayer(player1, player2);
     } else if (player2.canTag(player1)) {
@@ -33,23 +33,28 @@ class GameLogic {
     }
   }
 
+  // Freeze a player and notify everyone
   tagPlayer(tagger, tagged) {
+    // A shielded player cannot be tagged
+    if (tagged.state === CONSTANTS.PLAYER_STATES.SHIELDED) return;
+
     tagged.freeze();
     tagger.tags++;
+    
     this.room.broadcast('playerTagged', {
       tagger: tagger.getState(),
       tagged: tagged.getState()
     });
-    // **NEW**: Broadcast the specific state change
     this.room.broadcast('playerStateChanged', {
       playerId: tagged.id,
       state: tagged.state
     });
   }
 
+  // Check if any players have scored
   checkScoring() {
     for (const player of this.room.players.values()) {
-      if (player.state === CONSTANTS.PLAYER_STATES.ACTIVE) {
+      if (player.state !== CONSTANTS.PLAYER_STATES.FROZEN) {
         const enemyTeam = player.team === CONSTANTS.TEAMS.RED ? CONSTANTS.TEAMS.BLUE : CONSTANTS.TEAMS.RED;
         if (player.isInBase(enemyTeam)) {
           this.scorePoint(player);
@@ -58,6 +63,7 @@ class GameLogic {
     }
   }
 
+  // Award a point and check for a win
   scorePoint(player) {
     player.score++;
     this.room.teamScores[player.team]++;
@@ -73,6 +79,7 @@ class GameLogic {
     }
   }
 
+  // Handle a rescue attempt
   handleRescue(rescuer, rescued) {
     if (rescuer.team === rescued.team && rescued.state === CONSTANTS.PLAYER_STATES.FROZEN) {
       rescued.rescue();
@@ -82,7 +89,6 @@ class GameLogic {
         rescuer: rescuer.getState(),
         rescued: rescued.getState()
       });
-      // **NEW**: Broadcast the specific state change
       this.room.broadcast('playerStateChanged', {
         playerId: rescued.id,
         state: rescued.state
@@ -90,8 +96,11 @@ class GameLogic {
     }
   }
 
+  // End the game and declare a winner
   endGame(winnerTeam = null) {
+    if (this.room.gameState === CONSTANTS.GAME_STATES.ENDED) return; // Prevent multiple calls
     this.room.gameState = CONSTANTS.GAME_STATES.ENDED;
+    
     if (!winnerTeam) {
       if (this.room.teamScores.red > this.room.teamScores.blue) {
         winnerTeam = CONSTANTS.TEAMS.RED;
@@ -105,6 +114,8 @@ class GameLogic {
       finalScores: this.room.teamScores,
       playerStats: this.getPlayerStats()
     });
+
+    this.room.cleanup(); // Important to stop timers and loops
   }
 
   getPlayerStats() {

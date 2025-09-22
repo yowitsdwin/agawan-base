@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agawan Base - Multiplayer Game</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="loginScreen" class="screen">
+            <div class="login-form">
+                <h1>🎮 Agawan Base</h1>
+                <p>Classic Filipino multiplayer game</p>
+                <input type="text" id="usernameInput" placeholder="Enter your name" maxlength="20">
+                <button id="joinGameBtn">Join Game</button>
+            </div>
+        </div>
+
+        <div id="gameScreen" class="screen hidden">
+            <div id="gameUI">
+                <div id="scoreboard">
+                    <div class="team-score red-team">
+                        <span class="team-name">Red Team</span>
+                        <span class="score" id="redScore">0</span>
+                    </div>
+                    <div id="timer">5:00</div>
+                    <div class="team-score blue-team">
+                        <span class="team-name">Blue Team</span>
+                        <span class="score" id="blueScore">0</span>
+                    </div>
+                </div>
+                
+                <div id="playerList">
+                    <div class="team-players" id="redPlayers">
+                        <h3>Red Team</h3>
+                        <ul></ul>
+                    </div>
+                    <div class="team-players" id="bluePlayers">
+                        <h3>Blue Team</h3>
+                        <ul></ul>
+                    </div>
+                </div>
+
+                <div id="chatContainer">
+                    <div id="chatMessages"></div>
+                    <div id="chatInput">
+                        <label for="chatType" class="visually-hidden">Chat Type</label>
+                        <select id="chatType" title="Chat Type">
+                            <option value="global">All</option>
+                            <option value="team">Team</option>
+                        </select>
+                        <input type="text" id="messageInput" placeholder="Type message..." maxlength="100">
+                        <button id="sendMessageBtn">Send</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="gameCanvas"></div>
+            
+            <!-- Mobile Controls -->
+            <div id="mobileControls" class="mobile-only">
+                <div id="joystick"></div>
+                <div id="actionButtons">
+                    <button id="rescueBtn" class="action-btn">Rescue</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="gameOverScreen" class="screen hidden">
+            <div class="game-over-content">
+                <h1 id="gameOverTitle">Game Over!</h1>
+                <div id="gameOverStats"></div>
+                <button id="playAgainBtn">Play Again</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.70.0/phaser.min.js"></script>
+    <script src="/shared/constants.js"></script>
+    <script src="js/NetworkManager.js"></script>
+    <script src="js/Controls.js"></script>
+    <script src="js/UIManager.js"></script>
+    <script src="js/GameScene.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

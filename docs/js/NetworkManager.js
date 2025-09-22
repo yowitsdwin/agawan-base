@@ -5,27 +5,32 @@ class NetworkManager {
     this.callbacks = new Map();
   }
 
-  connect(serverUrl = "https://agawan-base.onrender.com") {
+  connect() {
+    // Dynamic backend URL
+    const serverUrl = window.location.hostname.includes("github.io")
+      ? "https://agawan-base.onrender.com" // Render backend
+      : "http://localhost:3000";           // Local backend
+
     return new Promise((resolve, reject) => {
-      this.socket = io(serverUrl);
-      
+      this.socket = io(serverUrl, { withCredentials: true });
+
       this.socket.on('connect', () => {
-        console.log('Connected to server');
+        console.log('Connected to server:', serverUrl);
         this.isConnected = true;
         resolve();
       });
-      
+
       this.socket.on('disconnect', () => {
         console.log('Disconnected from server');
         this.isConnected = false;
       });
-      
+
       this.socket.on('connect_error', (error) => {
         console.error('Connection error:', error);
         reject(error);
       });
-      
-      // Setup event handlers
+
+      // Setup all game event handlers
       this.setupEventHandlers();
     });
   }

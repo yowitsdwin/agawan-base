@@ -10,31 +10,34 @@ const setupSocketEvents = require('./events/socketEvents');
 const app = express();
 const server = http.createServer(app);
 
-// CORS configuration for production
+// ===== Allowed origins for CORS =====
+const allowedOrigins = process.env.NODE_ENV === 'production'
+  ? ["https://yowitsdwin.github.io/agawan-base/"]  // GitHub Pages URL
+  : ["http://localhost:3000", "http://127.0.0.1:5500"]; // local dev
+
+// ===== Socket.IO setup =====
 const io = socketIo(server, {
   cors: {
-    origin: process.env.NODE_ENV === 'production' 
-      ? ["https://yowitsdwin.github.io/agawan-base/"] // Replace with your GitHub Pages URL
-      : "*",
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
     credentials: true
   }
 });
 
-// Middleware
+// ===== Express CORS middleware =====
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production'
-    ? ["https://yowitsdwin.github.io/agawan-base/"] // Replace with your GitHub Pages URL
-    : "*",
+  origin: allowedOrigins,
   credentials: true
 }));
 
 app.use(express.json());
 
-// Serve static files (client) from the client directory
+// ===== Serve frontend static files =====
+// If using GitHub Pages, frontend will be hosted separately, 
+// so this mainly helps for local dev
 app.use(express.static(path.join(__dirname, '../client')));
 
-// Serve shared constants to client
+// Serve shared constants (required by frontend JS)
 app.get('/shared/constants.js', (req, res) => {
   res.setHeader('Content-Type', 'application/javascript');
   res.sendFile(path.join(__dirname, '../shared/constants.js'));
@@ -49,40 +52,33 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Serve the game for any other route
+// Fallback to index.html for SPA routing (only needed locally)
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/index.html'));
 });
 
-// Game state
+// ===== Game state =====
 const rooms = new Map();
 
-// Setup socket events
+// ===== Setup socket events =====
 setupSocketEvents(io, rooms, Player);
 
-// Use environment PORT or default to 3000
+// ===== Start server =====
 const PORT = process.env.PORT || 3000;
-
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🎮 Agawan Base Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('🛑 SIGTERM received, shutting down gracefully...');
+// ===== Graceful shutdown =====
+const gracefulShutdown = () => {
+  console.log('🛑 Shutting down gracefully...');
   rooms.forEach(room => room.cleanup());
   server.close(() => {
     console.log('✅ Server closed successfully');
     process.exit(0);
   });
-});
+};
 
-process.on('SIGINT', () => {
-  console.log('\n🛑 SIGINT received, shutting down gracefully...');
-  rooms.forEach(room => room.cleanup());
-  server.close(() => {
-    console.log('✅ Server closed successfully');
-    process.exit(0);
-  });
-});
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);

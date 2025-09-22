@@ -5,7 +5,9 @@
   "main": "server/server.js",
   "scripts": {
     "start": "node server/server.js",
-    "dev": "nodemon server/server.js"
+    "dev": "nodemon server/server.js",
+    "prepare-docs": "rm -rf docs && mkdir docs && cp -r client/* docs/",
+    "deploy-gh": "npm run prepare-docs && git add docs && git commit -m 'Update docs for GitHub Pages' && git push origin main"
   },
   "engines": {
     "node": ">=16.0.0"

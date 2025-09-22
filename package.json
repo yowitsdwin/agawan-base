@@ -4,9 +4,10 @@
   "description": "Multiplayer Filipino Agawan Base game",
   "main": "server/server.js",
   "scripts": {
-    "start": "node server/server.js",
-    "dev": "nodemon server/server.js"
-  },
+  "start": "node server/server.js",
+  "dev": "nodemon server/server.js",
+  "build": "cp shared/constants.js client/js/constants.js"
+},
   "engines": {
     "node": ">=16.0.0"
   },

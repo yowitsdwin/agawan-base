@@ -7,7 +7,7 @@ class NetworkManager {
 
   connect() {
     const serverUrl = window.location.hostname.includes("github.io")
-      ? "https://agawan-base.onrender.com" // Assumes a Render backend
+      ? "https://agawan-base-server.onrender.com" // Assumes a Render backend
       : `http://${window.location.hostname}:3000`; // Local backend
 
     return new Promise((resolve, reject) => {

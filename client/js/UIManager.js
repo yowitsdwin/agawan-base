@@ -56,29 +56,35 @@ class UIManager {
   }
 
   async joinGame(username) {
-    try {
-      // Connect to server
-      if (!window.networkManager) {
-        window.networkManager = new NetworkManager();
-        await window.networkManager.connect();
-      }
-      
-      // Join game
-      window.networkManager.joinGame(username);
-      
-      // Switch to game screen
-      this.showScreen('gameScreen');
-      
-      // Initialize game
-      if (window.initializeGame) {
-        window.initializeGame();
-      }
-      
-    } catch (error) {
-      console.error('Failed to join game:', error);
-      alert('Failed to connect to server. Please try again.');
+  try {
+    console.log("JoinGame called with username:", username);
+
+    if (!window.networkManager) {
+      console.log("Creating new NetworkManager...");
+      window.networkManager = new NetworkManager();
+      await window.networkManager.connect();
+      console.log("Connected to server");
     }
+
+    console.log("Joining game...");
+    window.networkManager.joinGame(username);
+
+    console.log("Switching screen...");
+    this.showScreen('gameScreen');
+
+    if (window.initializeGame) {
+      console.log("Initializing game...");
+      window.initializeGame();
+    } else {
+      console.warn("No initializeGame function found");
+    }
+
+  } catch (error) {
+    console.error('Failed to join game:', error);
+    alert('Failed to connect to server. Please try again.');
   }
+}
+
 
   showScreen(screenName) {
     Object.keys(this.elements).forEach(key => {

@@ -109,6 +109,7 @@ body {
     background: rgba(255, 255, 255, 0.1);
     padding: 1rem;
     border-radius: 10px;
+    -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
 }
 
@@ -152,6 +153,7 @@ body {
     background: rgba(255, 255, 255, 0.1);
     padding: 1rem;
     border-radius: 10px;
+    -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
     min-width: 200px;
 }
@@ -181,6 +183,7 @@ body {
     background: rgba(0, 0, 0, 0.7);
     border-radius: 10px;
     padding: 1rem;
+    -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
 }
 

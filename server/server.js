@@ -14,7 +14,7 @@ const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
     origin: process.env.NODE_ENV === 'production' 
-      ? ["https://yourusername.github.io"] // Replace with your GitHub Pages URL
+      ? ["https://yowitsdwin.github.io/agawan-base/"] // Replace with your GitHub Pages URL
       : "*",
     methods: ["GET", "POST"],
     credentials: true
@@ -24,7 +24,7 @@ const io = socketIo(server, {
 // Middleware
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
-    ? ["https://yourusername.github.io"] // Replace with your GitHub Pages URL
+    ? ["https://yowitsdwin.github.io/agawan-base/"] // Replace with your GitHub Pages URL
     : "*",
   credentials: true
 }));

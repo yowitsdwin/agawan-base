@@ -1,0 +1,49 @@
+# This is the unique name of your application on Fly.io.
+# It's set when you run `flyctl launch`.
+app = "agawan-base-server-fly"
+
+# This is the primary geographical region where your app will run.
+# 'hkg' (Hong Kong) is a great choice for players in the Philippines.
+primary_region = "hkg"
+
+# This section configures how Fly.io handles incoming HTTP/HTTPS traffic.
+[http_service]
+  # Your Node.js server is listening on port 3000 inside the container.
+  # Fly.io will forward external traffic to this internal port.
+  internal_port = 3000
+  
+  # Automatically redirect all HTTP requests to HTTPS for security.
+  force_https = true
+  
+  # These two lines enable "scale-to-zero". If no one is playing,
+  # Fly.io will automatically stop your server to save resources,
+  # and will start it again when a new player connects.
+  # This is perfect for the free tier.
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+  # This section defines the public-facing ports.
+  [[http_service.ports]]
+    # Handle standard HTTPS traffic on port 443.
+    port = 443
+    handlers = ["tls", "http"]
+    
+  [[http_service.ports]]
+    # Also handle standard HTTP traffic on port 80.
+    port = 80
+    handlers = ["http"]
+
+# This section defines a "health check". Fly.io will periodically
+# try to connect to your app's internal port to make sure it's still running.
+[[vm.services.tcp_checks]]
+  interval = "10s"
+  timeout = "2s"
+  port = 3000
+
+# This section defines the size of the virtual machine for your server.
+# 'shared-cpu-1x-256mb' is the standard, free-tier compatible size.
+[vm]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256

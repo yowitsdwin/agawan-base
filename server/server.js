@@ -1,6 +1,6 @@
 // --- Module Imports ---
 const express = require('express');
-const http = require('http'); // <-- THIS LINE WAS MISSING
+const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const path = require('path');
@@ -16,18 +16,19 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
   ? ["https://yowitsdwin.github.io"]
   : ["http://localhost:3000", "http://127.0.0.1:5500", "http://localhost:5500"];
 
-// --- NEW: Add a detailed logging statement for debugging ---
 console.log("--- SERVER INITIALIZING ---");
 console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 console.log("Allowed Origins:", allowedOrigins);
 console.log("--------------------------");
 
 const io = new Server(server, {
-  transports: ['websocket'], // Force WebSocket transport for reliability
+  // --- THIS IS THE FIX ---
+  // Force the server to only use the WebSocket protocol.
+  // This is the most reliable method for platforms like Render.
+  transports: ['websocket'],
+  
   cors: {
     origin: (origin, callback) => {
-      // --- NEW: Detailed CORS validation logging ---
-      // This log will show every single connection attempt and if it was allowed or blocked.
       if (!origin || allowedOrigins.indexOf(origin) !== -1) {
         console.log(`[CORS DEBUG] Allowed origin: ${origin || 'not specified'}`);
         callback(null, true);
@@ -46,7 +47,7 @@ app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use(express.json());
 
 app.get('/shared/constants.js', (req, res) => {
-  res.setHeader('Content-Type', 'application/javascript');
+  res.setHeader('Content-type', 'application/javascript');
   res.sendFile(path.join(__dirname, '../shared/constants.js'));
 });
 

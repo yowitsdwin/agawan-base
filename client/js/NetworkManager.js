@@ -18,24 +18,29 @@ class NetworkManager {
       ? LIVE_BACKEND_URL
       : `http://${window.location.hostname}:3000`;
 
+    // Add logging before attempting to connect
+    console.log(`[Socket DEBUG] Attempting to connect to server at: ${serverUrl}`);
+
     return new Promise((resolve, reject) => {
       // --- CRITICAL FIX ---
-      // Tell the client to connect using only the WebSocket protocol.
-      // This solves connection issues on platforms like Render by matching
-      // the server's configuration from the Canvas.
+      // Tell the client to connect using only the WebSocket protocol,
+      // matching the server's configuration in the Canvas.
       this.socket = io(serverUrl, {
         withCredentials: true,
         transports: ['websocket'] 
       });
 
       this.socket.on('connect', () => {
-        console.log('Successfully connected to server via WebSocket:', serverUrl);
+        // Log successful connection
+        console.log(`[Socket DEBUG] Successfully connected to server. Socket ID: ${this.socket.id}`);
         this.isConnected = true;
         resolve();
       });
 
-      this.socket.on('disconnect', () => {
-        console.log('Disconnected from server');
+      this.socket.on('disconnect', (reason) => {
+        // Log disconnection details
+        console.warn(`[Socket DEBUG] Disconnected from server. Reason: ${reason}`);
+        this.isConnected = false;
         if (window.uiManager) {
           alert('You have been disconnected from the server.');
           window.location.reload();
@@ -43,7 +48,8 @@ class NetworkManager {
       });
 
       this.socket.on('connect_error', (error) => {
-        console.error('Connection error:', error);
+        // Log the specific connection error
+        console.error(`[Socket DEBUG] Connection failed. Error:`, error.message);
         reject(error);
       });
 
@@ -71,7 +77,7 @@ class NetworkManager {
     });
   }
 
-  // Register a callback for a specific event (e.g., UIManager listens for 'roomStateUpdate').
+  // Register a callback for a specific event.
   on(event, callback) {
     if (!this.callbacks.has(event)) {
       this.callbacks.set(event, []);
@@ -104,3 +110,4 @@ class NetworkManager {
   rescuePlayer(targetId) { this.emit('rescuePlayer', { targetId }); }
   collectPowerup(powerupId) { this.emit('collectPowerup', { powerupId }); }
 }
+

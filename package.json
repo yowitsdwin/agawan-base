@@ -6,15 +6,16 @@
   "scripts": {
     "start": "node server/server.js",
     "dev": "nodemon server/server.js",
-    "build": "cp shared/constants.js docs/js/constants.js"
+    "build": "cp shared/constants.js client/js/constants.js",
+    "build-for-deploy": "rm -rf docs && mkdir docs && cp -r client/* docs/ && cp shared/constants.js docs/js/constants.js"
   },
   "engines": {
     "node": ">=16.0.0"
   },
   "dependencies": {
+    "cors": "^2.8.5",
     "express": "^4.18.2",
-    "socket.io": "^4.7.2",
-    "cors": "^2.8.5"
+    "socket.io": "^4.7.2"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
@@ -29,4 +30,3 @@
   "author": "Your Name",
   "license": "MIT"
 }
-

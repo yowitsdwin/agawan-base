@@ -60,4 +60,3 @@ if (typeof module !== 'undefined' && module.exports) {
 } else {
   window.GAME_CONSTANTS = GAME_CONSTANTS;
 }
-

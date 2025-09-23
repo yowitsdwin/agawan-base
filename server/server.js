@@ -12,13 +12,8 @@ const app = express();
 const server = http.createServer(app);
 
 // --- CORS (Cross-Origin Resource Sharing) Configuration ---
-// This is a CRITICAL security feature. It tells your server to only accept
-// connections from approved websites.
 const allowedOrigins = process.env.NODE_ENV === 'production'
-  // When your game is live, only allow connections from your GitHub Pages URL.
-  // Make sure this matches your actual GitHub Pages URL.
   ? ["https://yowitsdwin.github.io"]
-  // When you are testing locally, allow connections from local development servers.
   : ["http://localhost:3000", "http://127.0.0.1:5500", "http://localhost:5500"];
 
 const io = new Server(server, {
@@ -34,32 +29,28 @@ app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use(express.json());
 
 // --- Static File Serving ---
-// This route allows the client to fetch the shared constants file.
 app.get('/shared/constants.js', (req, res) => {
   res.setHeader('Content-Type', 'application/javascript');
   res.sendFile(path.join(__dirname, '../shared/constants.js'));
 });
 
-// Health check endpoint for deployment services like Render to verify the server is running.
 app.get('/health', (req, res) => {
   res.json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
-// For local development, this serves the client's index.html file.
-// In production, this part is not used as the frontend is on GitHub Pages.
+// --- THIS BLOCK IS CORRECTED ---
+// For local development, this serves the client's index.html file from the /client folder.
 if (process.env.NODE_ENV !== 'production') {
-    app.use(express.static(path.join(__dirname, '../docs')));
+    app.use(express.static(path.join(__dirname, '../client'))); // <-- Corrected to /client
     app.get('*', (req, res) => {
-        res.sendFile(path.join(__dirname, '../docs/index.html'));
+        res.sendFile(path.join(__dirname, '../client/index.html')); // <-- Corrected to /client
     });
 }
 
 // --- Game State Management ---
-// A global map to hold all active game rooms. For this game, we only have one.
 const rooms = new Map();
 
 // --- Socket.IO Event Handling ---
-// This function initializes all the real-time event listeners for the game.
 setupSocketEvents(io, rooms, Player);
 
 // --- Server Startup ---
@@ -71,8 +62,6 @@ server.listen(PORT, '0.0.0.0', () => {
 });
 
 // --- Graceful Shutdown Handling ---
-// Ensures that when the server is stopped (e.g., during a redeploy),
-// it cleans up resources properly.
 const gracefulShutdown = () => {
   console.log('🛑 Shutting down gracefully...');
   rooms.forEach(room => room.cleanup());

@@ -49,9 +49,30 @@ class UIManager {
       if (e.key === 'Enter') this.elements.joinGameBtn.click();
     });
 
-    // Lobby
-    this.elements.changeTeamBtn.addEventListener('click', () => window.networkManager.changeTeam());
-    this.elements.readyBtn.addEventListener('click', () => window.networkManager.playerReady());
+    // Lobby - Updated to use async methods
+    this.elements.changeTeamBtn.addEventListener('click', async () => {
+      try {
+        this.elements.changeTeamBtn.disabled = true;
+        await window.networkManager.changeTeam();
+      } catch (error) {
+        console.error('Failed to change team:', error);
+        alert('Failed to change team. Please try again.');
+      } finally {
+        this.elements.changeTeamBtn.disabled = false;
+      }
+    });
+
+    this.elements.readyBtn.addEventListener('click', async () => {
+      try {
+        this.elements.readyBtn.disabled = true;
+        await window.networkManager.playerReady();
+      } catch (error) {
+        console.error('Failed to toggle ready status:', error);
+        alert('Failed to toggle ready status. Please try again.');
+      } finally {
+        this.elements.readyBtn.disabled = false;
+      }
+    });
 
     // Chat
     this.elements.chatToggleBtn.addEventListener('click', () => this.toggleChat());
@@ -65,16 +86,38 @@ class UIManager {
   }
 
   async joinGame(username) {
+    // Show loading state
+    this.elements.joinGameBtn.disabled = true;
+    this.elements.joinGameBtn.textContent = 'Connecting...';
+
     try {
       if (!window.networkManager) {
         window.networkManager = new NetworkManager();
-        await window.networkManager.connect();
       }
-      window.networkManager.joinGame(username);
+      
+      // Ensure connection is established before joining
+      await window.networkManager.connect();
+      await window.networkManager.joinGame(username);
+      
       this.showScreen('lobbyScreen');
     } catch (error) {
       console.error('Failed to join game:', error);
-      alert('Failed to connect to the server. Please try again.');
+      
+      // Show specific error messages
+      let errorMessage = 'Failed to connect to the server. ';
+      if (error.message.includes('timeout')) {
+        errorMessage += 'The server is taking too long to respond.';
+      } else if (error.message.includes('CORS')) {
+        errorMessage += 'There was a connection policy issue.';
+      } else {
+        errorMessage += 'Please check your internet connection and try again.';
+      }
+      
+      alert(errorMessage);
+    } finally {
+      // Reset button state
+      this.elements.joinGameBtn.disabled = false;
+      this.elements.joinGameBtn.textContent = 'Join Game';
     }
   }
 
@@ -186,10 +229,38 @@ class UIManager {
     this.showScreen('gameOverScreen');
   }
 
+  // Add method to show action feedback
+  showActionFeedback(message) {
+    // Create a temporary feedback element
+    const feedback = document.createElement('div');
+    feedback.className = 'action-feedback';
+    feedback.textContent = message;
+    feedback.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 5px;
+      z-index: 1000;
+      pointer-events: none;
+    `;
+    
+    document.body.appendChild(feedback);
+    
+    // Remove after 2 seconds
+    setTimeout(() => {
+      if (feedback.parentNode) {
+        feedback.parentNode.removeChild(feedback);
+      }
+    }, 2000);
+  }
+
   escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
   }
 }
-

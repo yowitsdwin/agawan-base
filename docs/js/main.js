@@ -23,17 +23,19 @@ const gameConfig = {
 
 // Main function to initialize the game client
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('🎮 Agawan Base - Client Loaded');
+  console.log('Agawan Base - Client Loaded');
   uiManager = new UIManager();
   networkManager = new NetworkManager();
 
   // --- Primary Event Listener for UI Updates ---
   // This listener handles all real-time state changes for the UI
   networkManager.on('roomStateUpdate', (roomState) => {
-    if (roomState.gameState === CONSTANTS.GAME_STATES.LOBBY) {
+    // --- THIS IS THE FIX ---
+    // Use the correct variable name: GAME_CONSTANTS
+    if (roomState.gameState === GAME_CONSTANTS.GAME_STATES.LOBBY) {
       uiManager.showScreen('lobbyScreen');
       uiManager.updateLobby(roomState);
-    } else if (roomState.gameState === CONSTANTS.GAME_STATES.PLAYING) {
+    } else if (roomState.gameState === GAME_CONSTANTS.GAME_STATES.PLAYING) {
       uiManager.updateGameUI(roomState);
     }
   });
@@ -58,3 +60,4 @@ window.addEventListener('beforeunload', () => {
     window.networkManager.socket.disconnect();
   }
 });
+

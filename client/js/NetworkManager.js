@@ -21,7 +21,8 @@ class NetworkManager {
     return new Promise((resolve, reject) => {
       // --- CRITICAL FIX ---
       // Tell the client to connect using only the WebSocket protocol.
-      // This solves connection issues on platforms like Render.
+      // This solves connection issues on platforms like Render by matching
+      // the server's configuration from the Canvas.
       this.socket = io(serverUrl, {
         withCredentials: true,
         transports: ['websocket'] 
@@ -103,4 +104,3 @@ class NetworkManager {
   rescuePlayer(targetId) { this.emit('rescuePlayer', { targetId }); }
   collectPowerup(powerupId) { this.emit('collectPowerup', { powerupId }); }
 }
-

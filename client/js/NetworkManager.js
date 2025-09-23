@@ -1,6 +1,6 @@
 // ================================================================
 // SERVER URL CONFIGURATION
-// To point the game to a new server, change this URL.
+// This is the only place you need to change the server address.
 // ================================================================
 const LIVE_BACKEND_URL = "https://agawan-base-server.onrender.com";
 // ================================================================
@@ -13,22 +13,28 @@ class NetworkManager {
   }
 
   connect() {
+    // This logic automatically switches between your live URL and a local one for testing.
     const serverUrl = window.location.hostname.includes("github.io")
       ? LIVE_BACKEND_URL
       : `http://${window.location.hostname}:3000`;
 
     return new Promise((resolve, reject) => {
-      this.socket = io(serverUrl, { withCredentials: true });
+      // --- CRITICAL FIX ---
+      // Tell the client to connect using only the WebSocket protocol.
+      // This solves connection issues on platforms like Render.
+      this.socket = io(serverUrl, {
+        withCredentials: true,
+        transports: ['websocket'] 
+      });
 
       this.socket.on('connect', () => {
-        console.log('Connected to server:', serverUrl);
+        console.log('Successfully connected to server via WebSocket:', serverUrl);
         this.isConnected = true;
         resolve();
       });
 
       this.socket.on('disconnect', () => {
         console.log('Disconnected from server');
-        this.isConnected = false;
         if (window.uiManager) {
           alert('You have been disconnected from the server.');
           window.location.reload();
@@ -44,6 +50,7 @@ class NetworkManager {
     });
   }
 
+  // Sets up listeners for all events coming from the server.
   setupEventHandlers() {
     const events = [
       'gameStarted', 'gameOver', 'playerTagged', 'playerRescued',
@@ -57,13 +64,13 @@ class NetworkManager {
       });
     });
 
-    // This is the main event for continuous state synchronization
+    // This is the main event for continuous state synchronization.
     this.socket.on('roomStateUpdate', (data) => {
       this.trigger('roomStateUpdate', data);
     });
   }
 
-  // Register a callback for a specific event
+  // Register a callback for a specific event (e.g., UIManager listens for 'roomStateUpdate').
   on(event, callback) {
     if (!this.callbacks.has(event)) {
       this.callbacks.set(event, []);
@@ -71,14 +78,15 @@ class NetworkManager {
     this.callbacks.get(event).push(callback);
   }
 
-  // Trigger all registered callbacks for an event
+  // Trigger all registered callbacks for an event.
   trigger(event, data) {
     if (this.callbacks.has(event)) {
       this.callbacks.get(event).forEach(callback => callback(data));
     }
   }
 
-  // Emit an event to the server
+  // --- Methods to Send Events TO the Server ---
+
   emit(event, data) {
     if (this.socket && this.isConnected) {
       this.socket.emit(event, data);
@@ -87,36 +95,12 @@ class NetworkManager {
     }
   }
 
-  // --- Player Actions ---
-
-  joinGame(username) {
-    this.emit('joinGame', { username });
-  }
-
-  updatePosition(x, y) {
-    this.emit('updatePosition', { x, y });
-  }
-
-  sendChatMessage(message, type) {
-    this.emit('chatMessage', { message, type });
-  }
-
-  rescuePlayer(targetId) {
-    this.emit('rescuePlayer', { targetId });
-  }
-
-  collectPowerup(powerupId) {
-    this.emit('collectPowerup', { powerupId });
-  }
-
-  // --- New Lobby Actions ---
-
-  changeTeam() {
-    this.emit('changeTeam');
-  }
-
-  playerReady() {
-    this.emit('playerReady');
-  }
+  joinGame(username) { this.emit('joinGame', { username }); }
+  changeTeam() { this.emit('changeTeam'); }
+  playerReady() { this.emit('playerReady'); }
+  updatePosition(x, y) { this.emit('updatePosition', { x, y }); }
+  sendChatMessage(message, type) { this.emit('chatMessage', { message, type }); }
+  rescuePlayer(targetId) { this.emit('rescuePlayer', { targetId }); }
+  collectPowerup(powerupId) { this.emit('collectPowerup', { powerupId }); }
 }
 

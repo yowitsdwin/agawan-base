@@ -4,72 +4,86 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agawan Base - Multiplayer Game</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="gameContainer">
+        <!-- Login Screen -->
         <div id="loginScreen" class="screen">
-            <div class="login-form">
+            <div class="screen-content">
                 <h1>🎮 Agawan Base</h1>
-                <p>Classic Filipino multiplayer game</p>
+                <p>A Classic Filipino Multiplayer Game</p>
                 <input type="text" id="usernameInput" placeholder="Enter your name" maxlength="20">
                 <button id="joinGameBtn">Join Game</button>
             </div>
         </div>
 
+        <!-- Lobby Screen (NEW) -->
+        <div id="lobbyScreen" class="screen hidden">
+            <div class="screen-content">
+                <h1>Game Lobby</h1>
+                <div class="lobby-teams-container">
+                    <div class="lobby-team-panel" id="lobbyRedTeam">
+                        <h2>Red Team</h2>
+                        <ul></ul>
+                    </div>
+                    <div class="lobby-team-panel" id="lobbyBlueTeam">
+                        <h2>Blue Team</h2>
+                        <ul></ul>
+                    </div>
+                </div>
+                <div class="lobby-controls">
+                    <button id="changeTeamBtn">Change Team</button>
+                    <button id="readyBtn">Ready</button>
+                </div>
+                <p id="waitingMessage">Waiting for players to ready up...</p>
+            </div>
+        </div>
+
+        <!-- Game Screen -->
         <div id="gameScreen" class="screen hidden">
             <div id="gameUI">
+                <!-- Scoreboard and Timer -->
                 <div id="scoreboard">
                     <div class="team-score red-team">
-                        <span class="team-name">Red Team</span>
+                        <span class="team-name">Red</span>
                         <span class="score" id="redScore">0</span>
                     </div>
                     <div id="timer">5:00</div>
                     <div class="team-score blue-team">
-                        <span class="team-name">Blue Team</span>
+                        <span class="team-name">Blue</span>
                         <span class="score" id="blueScore">0</span>
                     </div>
                 </div>
-                
-                <div id="playerList">
-                    <div class="team-players" id="redPlayers">
-                        <h3>Red Team</h3>
-                        <ul></ul>
-                    </div>
-                    <div class="team-players" id="bluePlayers">
-                        <h3>Blue Team</h3>
-                        <ul></ul>
-                    </div>
-                </div>
-
-                <div id="chatContainer">
-                    <div id="chatMessages"></div>
-                    <div id="chatInput">
-                        <label for="chatType" class="visually-hidden">Chat Type</label>
-                        <select id="chatType" title="Chat Type">
-                            <option value="global">All</option>
-                            <option value="team">Team</option>
-                        </select>
-                        <input type="text" id="messageInput" placeholder="Type message..." maxlength="100">
-                        <button id="sendMessageBtn">Send</button>
+                <!-- Chat UI with Toggle -->
+                <div id="chat-ui-container">
+                    <button id="chatToggleBtn">💬</button>
+                    <div id="chatContainer" class="hidden">
+                        <div id="chatMessages"></div>
+                        <div id="chatInput">
+                            <select id="chatType" title="Chat Type">
+                                <option value="global">All</option>
+                                <option value="team">Team</option>
+                            </select>
+                            <input type="text" id="messageInput" placeholder="Type..." maxlength="100">
+                            <button id="sendMessageBtn">Send</button>
+                        </div>
                     </div>
                 </div>
             </div>
-
             <div id="gameCanvas"></div>
-            
             <div id="mobileControls" class="mobile-only">
-                <div id="joystick"></div>
-                <div id="actionButtons">
-                    <button id="rescueBtn" class="action-btn">Rescue</button>
-                </div>
+                <div id="joystick-container"><div id="joystick"></div></div>
+                <button id="actionBtn" class="action-btn">Rescue</button>
             </div>
-            
-            <div id="actionFeedback" class="hidden"></div>
         </div>
 
+        <!-- Game Over Screen -->
         <div id="gameOverScreen" class="screen hidden">
-            <div class="game-over-content">
+             <div class="screen-content">
                 <h1 id="gameOverTitle">Game Over!</h1>
                 <div id="gameOverStats"></div>
                 <button id="playAgainBtn">Play Again</button>

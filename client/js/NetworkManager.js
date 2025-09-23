@@ -1,3 +1,10 @@
+// ================================================================
+// SERVER URL CONFIGURATION
+// To point the game to a new server, change this URL.
+// ================================================================
+const LIVE_BACKEND_URL = "https://agawan-base-server.onrender.com";
+// ================================================================
+
 class NetworkManager {
   constructor() {
     this.socket = null;
@@ -7,8 +14,8 @@ class NetworkManager {
 
   connect() {
     const serverUrl = window.location.hostname.includes("github.io")
-      ? "https://agawan-base-server.onrender.com" // Assumes a Render backend
-      : `http://${window.location.hostname}:3000`; // Local backend
+      ? LIVE_BACKEND_URL
+      : `http://${window.location.hostname}:3000`;
 
     return new Promise((resolve, reject) => {
       this.socket = io(serverUrl, { withCredentials: true });
@@ -22,7 +29,10 @@ class NetworkManager {
       this.socket.on('disconnect', () => {
         console.log('Disconnected from server');
         this.isConnected = false;
-        alert('You have been disconnected from the server.');
+        if (window.uiManager) {
+          alert('You have been disconnected from the server.');
+          window.location.reload();
+        }
       });
 
       this.socket.on('connect_error', (error) => {
@@ -30,34 +40,30 @@ class NetworkManager {
         reject(error);
       });
 
-      // Setup all game event handlers
       this.setupEventHandlers();
     });
   }
 
   setupEventHandlers() {
     const events = [
-      'playerJoined', 'playerLeft', 'playerMoved', 'playerTagged',
-      'playerRescued', 'scoreUpdate', 'gameStarted', 'gameOver',
-      'chatMessage', 'powerupSpawned', 'powerupCollected',
-      'playerStateChanged' // New event
+      'gameStarted', 'gameOver', 'playerTagged', 'playerRescued',
+      'scoreUpdate', 'powerupSpawned', 'powerupCollected',
+      'playerStateChanged', 'chatMessage', 'serverError'
     ];
     
     events.forEach(event => {
       this.socket.on(event, (data) => {
-        if (this.callbacks.has(event)) {
-          this.callbacks.get(event).forEach(callback => callback(data));
-        }
+        this.trigger(event, data);
       });
     });
 
-    // **NEW**: Generic error handler from server
-    this.socket.on('serverError', (data) => {
-      console.error('Server error:', data.message);
-      alert(`Server error: ${data.message}`);
+    // This is the main event for continuous state synchronization
+    this.socket.on('roomStateUpdate', (data) => {
+      this.trigger('roomStateUpdate', data);
     });
   }
 
+  // Register a callback for a specific event
   on(event, callback) {
     if (!this.callbacks.has(event)) {
       this.callbacks.set(event, []);
@@ -65,6 +71,14 @@ class NetworkManager {
     this.callbacks.get(event).push(callback);
   }
 
+  // Trigger all registered callbacks for an event
+  trigger(event, data) {
+    if (this.callbacks.has(event)) {
+      this.callbacks.get(event).forEach(callback => callback(data));
+    }
+  }
+
+  // Emit an event to the server
   emit(event, data) {
     if (this.socket && this.isConnected) {
       this.socket.emit(event, data);
@@ -72,6 +86,8 @@ class NetworkManager {
       console.error(`Socket not connected. Cannot emit event '${event}'`);
     }
   }
+
+  // --- Player Actions ---
 
   joinGame(username) {
     this.emit('joinGame', { username });
@@ -92,4 +108,15 @@ class NetworkManager {
   collectPowerup(powerupId) {
     this.emit('collectPowerup', { powerupId });
   }
+
+  // --- New Lobby Actions ---
+
+  changeTeam() {
+    this.emit('changeTeam');
+  }
+
+  playerReady() {
+    this.emit('playerReady');
+  }
 }
+

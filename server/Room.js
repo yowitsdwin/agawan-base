@@ -5,46 +5,85 @@ class Room {
   constructor(id) {
     this.id = id;
     this.players = new Map();
-    this.gameState = CONSTANTS.GAME_STATES.WAITING;
+    this.gameState = CONSTANTS.GAME_STATES.LOBBY; // Start in the lobby
     this.teamScores = { red: 0, blue: 0 };
-    this.gameTimer = null;
     this.gameStartTime = null;
     this.gameLogic = new GameLogic(this);
     this.powerups = new Map();
     this.gameLoopInterval = null;
+
+    this.startGameLoop(); // The "heartbeat" of the room
+  }
+
+  // The main loop that runs 10x per second to keep everything in sync
+  startGameLoop() {
+    if (this.gameLoopInterval) clearInterval(this.gameLoopInterval);
+    this.gameLoopInterval = setInterval(() => {
+      // If in the lobby, check if all players are ready to start
+      if (this.gameState === CONSTANTS.GAME_STATES.LOBBY) {
+        if (this.players.size >= CONSTANTS.GAME_CONFIG.MIN_PLAYERS_TO_START && Array.from(this.players.values()).every(p => p.isReady)) {
+          this.startGame();
+        }
+      }
+      
+      // If the game is playing, update all game logic and timers
+      if (this.gameState === CONSTANTS.GAME_STATES.PLAYING) {
+        this.gameLogic.update(); // This will check timers, collisions, scoring, etc.
+        this.broadcast('roomStateUpdate', this.getRoomState()); 
+      }
+    }, 100); // Sync 10 times per second for smooth updates
   }
 
   addPlayer(player) {
     if (this.players.size >= CONSTANTS.GAME_CONFIG.MAX_PLAYERS_PER_TEAM * 2) {
-        player.socket.emit('serverError', { message: 'This room is full.' });
-        return;
+      player.socket.emit('serverError', { message: 'This room is full.' });
+      return;
     }
     
     this.players.set(player.id, player);
     const redCount = this.getTeamCount(CONSTANTS.TEAMS.RED);
     const blueCount = this.getTeamCount(CONSTANTS.TEAMS.BLUE);
-    const assignedTeam = redCount <= blueCount ? CONSTANTS.TEAMS.RED : CONSTANTS.TEAMS.BLUE;
-    player.setTeam(assignedTeam);
+    player.setTeam(redCount <= blueCount ? CONSTANTS.TEAMS.RED : CONSTANTS.TEAMS.BLUE);
     
-    // Notify all players (including the new one) about the current state
-    this.broadcast('playerJoined', {
-      player: player.getState(),
-      roomState: this.getRoomState()
-    });
-
-    if (this.players.size >= CONSTANTS.GAME_CONFIG.MIN_PLAYERS_TO_START && this.gameState === CONSTANTS.GAME_STATES.WAITING) {
-      // Short delay to allow players to see who joined before starting
-      setTimeout(() => this.startGame(), 2000);
-    }
+    // Send the latest state to everyone
+    this.broadcast('roomStateUpdate', this.getRoomState());
   }
 
   removePlayer(playerId) {
-    if (this.players.has(playerId)) {
-      this.players.delete(playerId);
-      this.broadcast('playerLeft', { playerId });
-      if (this.gameState === CONSTANTS.GAME_STATES.PLAYING && this.players.size < CONSTANTS.GAME_CONFIG.MIN_PLAYERS_TO_START) {
-          this.gameLogic.endGame();
+    this.players.delete(playerId);
+    if (this.gameState === CONSTANTS.GAME_STATES.PLAYING && this.players.size < CONSTANTS.GAME_CONFIG.MIN_PLAYERS_TO_START) {
+      this.gameLogic.endGame(null, "Not enough players.");
+    }
+    this.broadcast('roomStateUpdate', this.getRoomState());
+  }
+  
+  // Transition the room from Lobby to Playing
+  startGame() {
+    this.gameState = CONSTANTS.GAME_STATES.PLAYING;
+    this.gameStartTime = Date.now();
+    this.teamScores = { red: 0, blue: 0 };
+    this.players.forEach(p => p.resetToBase());
+    this.broadcast('gameStarted', this.getRoomState());
+  }
+
+  changeTeam(playerId) {
+    const player = this.players.get(playerId);
+    if (player && this.gameState === CONSTANTS.GAME_STATES.LOBBY) {
+      player.unready();
+      const newTeam = player.team === CONSTANTS.TEAMS.RED ? CONSTANTS.TEAMS.BLUE : CONSTANTS.TEAMS.RED;
+      const newTeamCount = this.getTeamCount(newTeam);
+      if (newTeamCount < CONSTANTS.GAME_CONFIG.MAX_PLAYERS_PER_TEAM) {
+        player.team = newTeam;
       }
+      this.broadcast('roomStateUpdate', this.getRoomState());
+    }
+  }
+
+  setPlayerReady(playerId) {
+    const player = this.players.get(playerId);
+    if (player && this.gameState === CONSTANTS.GAME_STATES.LOBBY) {
+      player.isReady = !player.isReady;
+      this.broadcast('roomStateUpdate', this.getRoomState());
     }
   }
 
@@ -52,57 +91,25 @@ class Room {
     return Array.from(this.players.values()).filter(p => p.team === team).length;
   }
 
-  startGame() {
-    this.gameState = CONSTANTS.GAME_STATES.PLAYING;
-    this.gameStartTime = Date.now();
-    this.teamScores = { red: 0, blue: 0 };
-    
-    this.players.forEach(player => player.resetToBase());
-    
-    this.broadcast('gameStarted', { roomState: this.getRoomState() });
-    
-    this.gameTimer = setTimeout(() => {
-      this.gameLogic.endGame();
-    }, CONSTANTS.GAME_CONFIG.GAME_DURATION);
-    
-    this.startGameLoop();
-  }
-
-  startGameLoop() {
-    if (this.gameLoopInterval) clearInterval(this.gameLoopInterval);
-    this.gameLoopInterval = setInterval(() => {
-      if (this.gameState === CONSTANTS.GAME_STATES.PLAYING) {
-        this.gameLogic.checkCollisions();
-        this.gameLogic.checkScoring();
-        this.updatePowerups();
-      } else {
-        clearInterval(this.gameLoopInterval);
-      }
-    }, 1000 / 60); // 60 FPS
-  }
-
   updatePowerups() {
-    // Spawn powerups periodically, with a max of 3 on the map
     if (this.powerups.size < 3 && Math.random() < 0.01) {
-      this.spawnPowerup();
+      const powerupTypes = Object.values(CONSTANTS.POWERUPS);
+      const type = powerupTypes[Math.floor(Math.random() * powerupTypes.length)];
+      const powerup = {
+        id: Date.now() + Math.random(),
+        type: type.id,
+        x: 150 + Math.random() * (CONSTANTS.MAP.WIDTH - 300),
+        y: 100 + Math.random() * (CONSTANTS.MAP.HEIGHT - 200)
+      };
+      this.powerups.set(powerup.id, powerup);
+      this.broadcast('powerupSpawned', powerup);
     }
   }
 
-  spawnPowerup() {
-    const powerupTypes = Object.values(CONSTANTS.POWERUPS);
-    const type = powerupTypes[Math.floor(Math.random() * powerupTypes.length)];
-    const powerup = {
-      id: Date.now() + Math.random(),
-      type: type.id,
-      x: 150 + Math.random() * (CONSTANTS.MAP.WIDTH - 300),
-      y: 100 + Math.random() * (CONSTANTS.MAP.HEIGHT - 200)
-    };
-    this.powerups.set(powerup.id, powerup);
-    this.broadcast('powerupSpawned', powerup);
-  }
-
   broadcast(event, data) {
-    this.players.forEach(player => player.socket.emit(event, data));
+    this.players.forEach(player => {
+      player.socket.emit(event, data);
+    });
   }
 
   getRoomState() {
@@ -125,11 +132,11 @@ class Room {
   }
 
   cleanup() {
-    if (this.gameTimer) clearTimeout(this.gameTimer);
     if (this.gameLoopInterval) clearInterval(this.gameLoopInterval);
     this.players.forEach(p => p.clearAllPowerups());
-    console.log(`Room ${this.id} cleaned up.`);
+    console.log(`Room ${this.id} has been cleaned up.`);
   }
 }
 
 module.exports = Room;
+

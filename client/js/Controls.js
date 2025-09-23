@@ -1,7 +1,7 @@
 class Controls {
   constructor(scene) {
     this.scene = scene;
-    this.keys = {};
+    this.keys = scene.input.keyboard.addKeys('W,A,S,D,UP,LEFT,DOWN,RIGHT,SPACE');
     this.mobile = this.isMobileDevice();
     this.joystick = null;
     this.movement = { x: 0, y: 0 };
@@ -13,108 +13,58 @@ class Controls {
   }
 
   isMobileDevice() {
-    return /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-      (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
+    return /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   }
 
   setupKeyboard() {
-    // WASD Keys
-    this.keys.W = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
-    this.keys.A = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
-    this.keys.S = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
-    this.keys.D = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
-    
-    // Arrow Keys
-    this.keys.UP = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP);
-    this.keys.LEFT = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT);
-    this.keys.DOWN = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN);
-    this.keys.RIGHT = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT);
-    
-    // Action Keys
-    this.keys.SPACE = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
-    this.keys.ENTER = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
-    
-    // Action key handlers
-    this.keys.SPACE.on('down', () => {
-      this.handleAction();
-    });
+    this.keys.SPACE.on('down', () => this.handleAction());
   }
 
   setupMobileControls() {
-    const joystickElement = document.getElementById('joystick');
-    const rescueBtn = document.getElementById('rescueBtn');
+    const joystickBase = document.getElementById('joystick-container');
+    const joystickKnob = document.getElementById('joystick');
+    const actionBtn = document.getElementById('actionBtn');
     
-    if (!joystickElement) return;
-    this.joystick = {
-      element: joystickElement,
-      center: { x: 50, y: 50 },
-      isDragging: false,
-      currentPos: { x: 50, y: 50 }
-    };
-
-    // Touch events for joystick
-    joystickElement.addEventListener('touchstart', (e) => {
+    if (!joystickBase || !joystickKnob || !actionBtn) return;
+    
+    actionBtn.addEventListener('touchstart', (e) => {
       e.preventDefault();
-      this.joystick.isDragging = true;
-      this.updateJoystick(e.touches[0]);
-    });
-    document.addEventListener('touchmove', (e) => {
-      if (this.joystick.isDragging) {
-        e.preventDefault();
-        this.updateJoystick(e.touches[0]);
-      }
-    });
-    document.addEventListener('touchend', () => {
-      if (this.joystick.isDragging) {
-        this.joystick.isDragging = false;
-        this.resetJoystick();
-      }
+      this.handleAction();
     });
 
-    // Rescue button
-    if (rescueBtn) {
-      rescueBtn.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        this.handleAction();
-      });
-    }
-  }
+    // Simple joystick logic
+    joystickBase.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      const touch = e.touches[0];
+      const rect = joystickBase.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      let deltaX = touch.clientX - centerX;
+      let deltaY = touch.clientY - centerY;
+      
+      const distance = Math.hypot(deltaX, deltaY);
+      const maxDistance = rect.width / 2;
+      
+      // Normalize vector
+      const normalizedX = deltaX / distance;
+      const normalizedY = deltaY / distance;
 
-  updateJoystick(touch) {
-    const rect = this.joystick.element.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    let deltaX = touch.clientX - centerX;
-    let deltaY = touch.clientY - centerY;
-    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-    const maxDistance = rect.width / 2 - 20;
-    if (distance > maxDistance) {
-      deltaX = (deltaX / distance) * maxDistance;
-      deltaY = (deltaY / distance) * maxDistance;
-    }
+      this.movement = { x: normalizedX, y: normalizedY };
+      
+      const knobX = Math.min(maxDistance - joystickKnob.clientWidth / 2, distance) * normalizedX;
+      const knobY = Math.min(maxDistance - joystickKnob.clientHeight / 2, distance) * normalizedY;
+      
+      joystickKnob.style.transform = `translate(-50%, -50%) translate(${knobX}px, ${knobY}px)`;
+    });
     
-    this.joystick.currentPos.x = 50 + (deltaX / maxDistance) * 30;
-    this.joystick.currentPos.y = 50 + (deltaY / maxDistance) * 30;
-    
-    const knob = this.joystick.element; // Simplified
-    knob.style.transform = `translate(${this.joystick.currentPos.x - 50}px, ${this.joystick.currentPos.y - 50}px)`;
-    
-    this.movement.x = deltaX / maxDistance;
-    this.movement.y = deltaY / maxDistance;
-  }
-
-  resetJoystick() {
-    this.joystick.currentPos = { x: 50, y: 50 };
-    this.movement = { x: 0, y: 0 };
-    
-    const knob = this.joystick.element; // Simplified
-    knob.style.transform = 'translate(-50%, -50%)';
+    joystickBase.addEventListener('touchend', () => {
+      this.movement = { x: 0, y: 0 };
+      joystickKnob.style.transform = `translate(-50%, -50%)`;
+    });
   }
 
   getMovement() {
-    if (this.mobile && this.joystick && this.joystick.isDragging) {
-      return this.movement;
-    }
+    if (this.mobile) return this.movement;
     
     let x = 0;
     let y = 0;
@@ -125,31 +75,35 @@ class Controls {
     if (this.keys.S.isDown || this.keys.DOWN.isDown) y = 1;
 
     if (x !== 0 && y !== 0) {
-      x *= 0.7071; // Normalize diagonal movement
-      y *= 0.7071;
+      const diag = 1 / Math.sqrt(2);
+      x *= diag;
+      y *= diag;
     }
     
     return { x, y };
   }
 
   handleAction() {
-    if (this.scene.localPlayer) {
-      const nearbyPlayers = this.scene.findNearbyPlayers(this.scene.localPlayer, 50);
-      const frozenTeammate = nearbyPlayers.find(p => 
-        p.team === this.scene.localPlayer.team && 
-        p.state === GAME_CONSTANTS.PLAYER_STATES.FROZEN
-      );
+    if (this.scene.localPlayer && this.scene.localPlayer.state !== 'frozen') {
+      const localContainer = this.scene.players.get(this.scene.localPlayer.id);
+      if(!localContainer) return;
+
+      const nearbyPlayers = [];
+      this.scene.players.forEach(p => {
+        if(p.playerData.id !== this.scene.localPlayer.id) {
+            if(Phaser.Math.Distance.Between(localContainer.x, localContainer.y, p.x, p.y) < 50) {
+              nearbyPlayers.push(p.playerData);
+            }
+        }
+      });
+      
+      const frozenTeammate = nearbyPlayers.find(p => p.team === this.scene.localPlayer.team && p.state === 'frozen');
       
       if (frozenTeammate) {
         window.networkManager.rescuePlayer(frozenTeammate.id);
       } else {
-        // **NEW**: Provide feedback if no one is nearby to rescue
-        window.uiManager.showActionFeedback('No one to rescue!');
+        window.uiManager.showActionFeedback('No frozen teammate nearby!');
       }
     }
-  }
-
-  isActionPressed() {
-    return this.keys.SPACE.isDown;
   }
 }

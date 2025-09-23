@@ -1,26 +1,41 @@
 class UIManager {
   constructor() {
     this.elements = {
+      // Screens
       loginScreen: document.getElementById('loginScreen'),
+      lobbyScreen: document.getElementById('lobbyScreen'),
       gameScreen: document.getElementById('gameScreen'),
       gameOverScreen: document.getElementById('gameOverScreen'),
+
+      // Login Controls
       usernameInput: document.getElementById('usernameInput'),
       joinGameBtn: document.getElementById('joinGameBtn'),
+
+      // Lobby Controls
+      lobbyRedTeam: document.getElementById('lobbyRedTeam').querySelector('ul'),
+      lobbyBlueTeam: document.getElementById('lobbyBlueTeam').querySelector('ul'),
+      changeTeamBtn: document.getElementById('changeTeamBtn'),
+      readyBtn: document.getElementById('readyBtn'),
+
+      // Game UI
       redScore: document.getElementById('redScore'),
       blueScore: document.getElementById('blueScore'),
       timer: document.getElementById('timer'),
-      redPlayers: document.getElementById('redPlayers').querySelector('ul'),
-      bluePlayers: document.getElementById('bluePlayers').querySelector('ul'),
+
+      // Chat
+      chatToggleBtn: document.getElementById('chatToggleBtn'),
+      chatContainer: document.getElementById('chatContainer'),
       chatMessages: document.getElementById('chatMessages'),
       messageInput: document.getElementById('messageInput'),
       sendMessageBtn: document.getElementById('sendMessageBtn'),
       chatType: document.getElementById('chatType'),
+
+      // Game Over
       gameOverTitle: document.getElementById('gameOverTitle'),
       gameOverStats: document.getElementById('gameOverStats'),
-      playAgainBtn: document.getElementById('playAgainBtn'),
-      actionFeedback: document.getElementById('actionFeedback'), // New UI element
+      playAgainBtn: document.getElementById('playAgainBtn')
     };
-    this.feedbackTimeout = null;
+
     this.setupEventListeners();
   }
 
@@ -28,28 +43,25 @@ class UIManager {
     // Login
     this.elements.joinGameBtn.addEventListener('click', () => {
       const username = this.elements.usernameInput.value.trim();
-      if (username) {
-        this.joinGame(username);
-      }
+      if (username) this.joinGame(username);
     });
     this.elements.usernameInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        this.elements.joinGameBtn.click();
-      }
-    });
-    
-    // Chat
-    this.elements.sendMessageBtn.addEventListener('click', () => this.sendMessage());
-    this.elements.messageInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        this.sendMessage();
-      }
+      if (e.key === 'Enter') this.elements.joinGameBtn.click();
     });
 
-    // Play again - reloads the page for a clean state
-    this.elements.playAgainBtn.addEventListener('click', () => {
-      window.location.reload();
+    // Lobby
+    this.elements.changeTeamBtn.addEventListener('click', () => window.networkManager.changeTeam());
+    this.elements.readyBtn.addEventListener('click', () => window.networkManager.playerReady());
+
+    // Chat
+    this.elements.chatToggleBtn.addEventListener('click', () => this.toggleChat());
+    this.elements.sendMessageBtn.addEventListener('click', () => this.sendMessage());
+    this.elements.messageInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') this.sendMessage();
     });
+
+    // Game Over
+    this.elements.playAgainBtn.addEventListener('click', () => window.location.reload());
   }
 
   async joinGame(username) {
@@ -59,10 +71,7 @@ class UIManager {
         await window.networkManager.connect();
       }
       window.networkManager.joinGame(username);
-      this.showScreen('gameScreen');
-      if (window.initializeGame) {
-        window.initializeGame();
-      }
+      this.showScreen('lobbyScreen');
     } catch (error) {
       console.error('Failed to join game:', error);
       alert('Failed to connect to the server. Please try again.');
@@ -70,10 +79,42 @@ class UIManager {
   }
 
   showScreen(screenName) {
-    ['loginScreen', 'gameScreen', 'gameOverScreen'].forEach(id => {
+    ['loginScreen', 'lobbyScreen', 'gameScreen', 'gameOverScreen'].forEach(id => {
       this.elements[id].classList.add('hidden');
     });
     this.elements[screenName].classList.remove('hidden');
+  }
+
+  // Update the lobby UI based on the room state from the server
+  updateLobby(roomState) {
+    const { players } = roomState;
+    this.elements.lobbyRedTeam.innerHTML = '';
+    this.elements.lobbyBlueTeam.innerHTML = '';
+
+    players.forEach(player => {
+      const li = document.createElement('li');
+      li.textContent = player.username;
+      if (player.isReady) li.classList.add('ready');
+      
+      const listElement = player.team === 'red' ? this.elements.lobbyRedTeam : this.elements.lobbyBlueTeam;
+      listElement.appendChild(li);
+    });
+
+    const localPlayer = players.find(p => p.id === window.networkManager.socket.id);
+    if (localPlayer) {
+      if (localPlayer.isReady) {
+        this.elements.readyBtn.classList.add('ready-active');
+        this.elements.readyBtn.textContent = 'Unready';
+      } else {
+        this.elements.readyBtn.classList.remove('ready-active');
+        this.elements.readyBtn.textContent = 'Ready';
+      }
+    }
+  }
+
+  updateGameUI(roomState) {
+    this.updateScores(roomState.teamScores);
+    this.updateTimer(roomState.timeRemaining);
   }
 
   updateScores(teamScores) {
@@ -83,35 +124,12 @@ class UIManager {
 
   updateTimer(timeRemaining) {
     const minutes = Math.floor(timeRemaining / 60000);
-    const seconds = Math.floor((timeRemaining % 60000) / 1000);
-    this.elements.timer.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    const seconds = Math.floor((timeRemaining % 60000) / 1000).toString().padStart(2, '0');
+    this.elements.timer.textContent = `${minutes}:${seconds}`;
   }
 
-  updatePlayerList(players) {
-    const redPlayers = players.filter(p => p.team === GAME_CONSTANTS.TEAMS.RED);
-    const bluePlayers = players.filter(p => p.team === GAME_CONSTANTS.TEAMS.BLUE);
-    
-    this.elements.redPlayers.innerHTML = '';
-    redPlayers.forEach(player => {
-      const li = document.createElement('li');
-      li.textContent = `${player.username} (${player.score})`;
-      if (player.state === GAME_CONSTANTS.PLAYER_STATES.FROZEN) {
-        li.classList.add('frozen');
-        li.textContent += ' 🧊';
-      }
-      this.elements.redPlayers.appendChild(li);
-    });
-
-    this.elements.bluePlayers.innerHTML = '';
-    bluePlayers.forEach(player => {
-      const li = document.createElement('li');
-      li.textContent = `${player.username} (${player.score})`;
-      if (player.state === GAME_CONSTANTS.PLAYER_STATES.FROZEN) {
-        li.classList.add('frozen');
-        li.textContent += ' 🧊';
-      }
-      this.elements.bluePlayers.appendChild(li);
-    });
+  toggleChat() {
+    this.elements.chatContainer.classList.toggle('hidden');
   }
 
   addChatMessage(messageData) {
@@ -119,7 +137,7 @@ class UIManager {
     messageDiv.className = `chat-message ${messageData.type} ${messageData.team || ''}`;
     const timestamp = new Date(messageData.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const typePrefix = messageData.type === 'team' ? '[TEAM] ' : '';
-    
+
     messageDiv.innerHTML = `
       <span class="timestamp">[${timestamp}]</span>
       ${typePrefix}
@@ -128,7 +146,7 @@ class UIManager {
     `;
     this.elements.chatMessages.appendChild(messageDiv);
     this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
-    
+
     while (this.elements.chatMessages.children.length > 50) {
       this.elements.chatMessages.children[0].remove();
     }
@@ -144,7 +162,7 @@ class UIManager {
   }
 
   showGameOver(gameOverData) {
-    const { winner, finalScores, playerStats } = gameOverData;
+    const { winner, reason, finalScores, playerStats } = gameOverData;
     if (winner) {
       this.elements.gameOverTitle.textContent = `${winner.toUpperCase()} TEAM WINS!`;
       this.elements.gameOverTitle.className = winner === 'red' ? 'red-team' : 'blue-team';
@@ -152,15 +170,17 @@ class UIManager {
       this.elements.gameOverTitle.textContent = 'GAME TIED!';
       this.elements.gameOverTitle.className = '';
     }
-    
-    let statsHtml = `<div class="final-score">Final Score: <span class="red-team">${finalScores.red}</span> - <span class="blue-team">${finalScores.blue}</span></div><h3>Player Statistics</h3>`;
+
+    let statsHtml = `<p class="game-over-reason">${this.escapeHtml(reason)}</p>
+                     <div class="final-score">Final Score: <span class="red-team">${finalScores.red}</span> - <span class="blue-team">${finalScores.blue}</span></div>
+                     <h3>Player Statistics</h3>`;
+                     
     playerStats.sort((a, b) => b.score - a.score).forEach(player => {
       statsHtml += `
         <div class="stat-row">
           <span class="${player.team}-team">${this.escapeHtml(player.username)}</span>
           <span>Score: ${player.score} | Tags: ${player.tags} | Rescues: ${player.rescues}</span>
-        </div>
-      `;
+        </div>`;
     });
     this.elements.gameOverStats.innerHTML = statsHtml;
     this.showScreen('gameOverScreen');
@@ -171,17 +191,5 @@ class UIManager {
     div.textContent = text;
     return div.innerHTML;
   }
-
-  // **NEW**: Method to show feedback messages
-  showActionFeedback(message) {
-    if (this.feedbackTimeout) {
-      clearTimeout(this.feedbackTimeout);
-    }
-    const feedbackEl = this.elements.actionFeedback;
-    feedbackEl.textContent = message;
-    feedbackEl.classList.remove('hidden');
-    this.feedbackTimeout = setTimeout(() => {
-      feedbackEl.classList.add('hidden');
-    }, 1500);
-  }
 }
+

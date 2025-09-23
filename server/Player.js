@@ -15,7 +15,11 @@ class Player {
     this.rescues = 0;
     this.speedMultiplier = 1;
     this.lastUpdate = Date.now();
-    this.activePowerups = new Map(); // To track active powerups and their timeouts
+    this.activePowerups = new Map();
+
+    // New properties for lobby and freeze mechanics
+    this.isReady = false;
+    this.frozenUntil = 0; // Timestamp for when the player auto-unfreezes
   }
 
   setTeam(team) {
@@ -62,22 +66,29 @@ class Player {
     if (this.team === otherPlayer.team || this.state !== CONSTANTS.PLAYER_STATES.ACTIVE || otherPlayer.state !== CONSTANTS.PLAYER_STATES.ACTIVE) {
       return false;
     }
-    // "Later leaver tags earlier leaver" rule
     return this.baseExitTime > otherPlayer.baseExitTime;
   }
 
+  // Set player to FROZEN and start the 5-second timer
   freeze() {
     this.state = CONSTANTS.PLAYER_STATES.FROZEN;
+    this.frozenUntil = Date.now() + CONSTANTS.GAME_CONFIG.FROZEN_DURATION;
     this.clearAllPowerups();
   }
 
+  // Rescue a player, making them ACTIVE and clearing the timer
   rescue() {
-    // If rescued, become active again, but baseExitTime is not reset
     this.state = CONSTANTS.PLAYER_STATES.ACTIVE;
+    this.frozenUntil = 0;
   }
   
+  // Set player back to unready status (e.g., when changing teams)
+  unready() {
+    this.isReady = false;
+  }
+
   addPowerup(powerup) {
-    this.clearPowerup(powerup.id); // Clear existing timeout if any
+    this.clearPowerup(powerup.id);
 
     const timeout = setTimeout(() => {
       this.removePowerup(powerup.id);
@@ -85,7 +96,6 @@ class Player {
 
     this.activePowerups.set(powerup.id, timeout);
 
-    // Apply immediate effects
     if (powerup.id === CONSTANTS.POWERUPS.SPEED_BOOST.id) {
       this.speedMultiplier = powerup.speedMultiplier;
     } else if (powerup.id === CONSTANTS.POWERUPS.SHIELD.id) {
@@ -95,7 +105,6 @@ class Player {
 
   removePowerup(powerupId) {
     this.clearPowerup(powerupId);
-    // Revert effects
     if (powerupId === CONSTANTS.POWERUPS.SPEED_BOOST.id) {
       this.speedMultiplier = 1;
     } else if (powerupId === CONSTANTS.POWERUPS.SHIELD.id) {
@@ -104,7 +113,7 @@ class Player {
       }
     }
   }
-  
+
   clearPowerup(powerupId) {
     if (this.activePowerups.has(powerupId)) {
       clearTimeout(this.activePowerups.get(powerupId));
@@ -113,20 +122,30 @@ class Player {
   }
 
   clearAllPowerups() {
-      for (const powerupId of this.activePowerups.keys()) {
-          this.removePowerup(powerupId);
-      }
+    for (const powerupId of this.activePowerups.keys()) {
+        this.removePowerup(powerupId);
+    }
   }
 
+  // Get the player's state to send to clients
   getState() {
     return {
-      id: this.id, username: this.username, team: this.team,
-      x: this.x, y: this.y, state: this.state, score: this.score,
-      tags: this.tags, rescues: this.rescues,
-      // Send active powerup keys to the client
-      activePowerups: Array.from(this.activePowerups.keys())
+      id: this.id,
+      username: this.username,
+      team: this.team,
+      x: this.x,
+      y: this.y,
+      state: this.state,
+      score: this.score,
+      tags: this.tags,
+      rescues: this.rescues,
+      activePowerups: Array.from(this.activePowerups.keys()),
+      // Include new properties for the client
+      isReady: this.isReady,
+      frozenUntil: this.frozenUntil
     };
   }
 }
 
 module.exports = Player;
+

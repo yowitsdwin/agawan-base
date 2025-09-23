@@ -3,7 +3,7 @@ window.game = null;
 window.networkManager = null;
 window.uiManager = null;
 
-// Game configuration
+// Phaser game configuration
 const gameConfig = {
   type: Phaser.AUTO,
   width: window.innerWidth,
@@ -12,9 +12,7 @@ const gameConfig = {
   backgroundColor: '#2d3436',
   physics: {
     default: 'arcade',
-    arcade: {
-      gravity: { y: 0 },
-    }
+    arcade: { gravity: { y: 0 } }
   },
   scene: GameScene,
   scale: {
@@ -23,32 +21,38 @@ const gameConfig = {
   }
 };
 
-// Initialize game when called from UI
-window.initializeGame = function() {
-  if (!window.game) {
-    window.game = new Phaser.Game(gameConfig);
-  }
-};
-
-// Initialize UI on page load
+// Main function to initialize the game client
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('🎮 Agawan Base - Game Loaded');
-  window.uiManager = new UIManager();
+  console.log('🎮 Agawan Base - Client Loaded');
+  uiManager = new UIManager();
+  networkManager = new NetworkManager();
+
+  // --- Primary Event Listener for UI Updates ---
+  // This listener handles all real-time state changes for the UI
+  networkManager.on('roomStateUpdate', (roomState) => {
+    if (roomState.gameState === CONSTANTS.GAME_STATES.LOBBY) {
+      uiManager.showScreen('lobbyScreen');
+      uiManager.updateLobby(roomState);
+    } else if (roomState.gameState === CONSTANTS.GAME_STATES.PLAYING) {
+      uiManager.updateGameUI(roomState);
+    }
+  });
   
-  const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-                   (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
-  
-  if (isMobile) {
-    document.body.classList.add('mobile-device');
-  }
-  
-  const usernameInput = document.getElementById('usernameInput');
-  if (usernameInput) {
-    usernameInput.focus();
-  }
+  // This listener starts the Phaser game scene
+  networkManager.on('gameStarted', (roomState) => {
+    if (!window.game) {
+      window.game = new Phaser.Game(gameConfig);
+    }
+    uiManager.showScreen('gameScreen');
+  });
+
+  // This listener handles server error messages
+  networkManager.on('serverError', (data) => {
+    alert(`Server error: ${data.message}`);
+  });
 });
 
-// Handle page unload
+// Graceful disconnect on page unload
 window.addEventListener('beforeunload', () => {
   if (window.networkManager && window.networkManager.socket) {
     window.networkManager.socket.disconnect();

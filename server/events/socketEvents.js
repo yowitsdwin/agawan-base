@@ -1,5 +1,5 @@
-const CONSTANTS = require('../../shared/constants');
-const Room = require('../Room');
+const CONSTANTS = require('../../shared/constants.js');
+const Room = require('../Room.js');
 
 function setupSocketEvents(io, rooms, Player) {
   io.on('connection', (socket) => {

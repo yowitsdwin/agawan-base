@@ -1,6 +1,6 @@
 // --- Module Imports ---
 const express = require('express');
-
+const http = require('http'); // <-- THIS LINE WAS MISSING
 const { Server } = require('socket.io');
 const cors = require('cors');
 const path = require('path');
@@ -16,14 +16,26 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
   ? ["https://yowitsdwin.github.io"]
   : ["http://localhost:3000", "http://127.0.0.1:5500", "http://localhost:5500"];
 
+// --- NEW: Add a detailed logging statement for debugging ---
+console.log("--- SERVER INITIALIZING ---");
+console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+console.log("Allowed Origins:", allowedOrigins);
+console.log("--------------------------");
+
 const io = new Server(server, {
-  // --- THIS IS THE FIX ---
-  // Force the server to only use the WebSocket protocol.
-  // This is the most reliable method for platforms like Render.
-  transports: ['websocket'],
-  
+  transports: ['websocket'], // Force WebSocket transport for reliability
   cors: {
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      // --- NEW: Detailed CORS validation logging ---
+      // This log will show every single connection attempt and if it was allowed or blocked.
+      if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+        console.log(`[CORS DEBUG] Allowed origin: ${origin || 'not specified'}`);
+        callback(null, true);
+      } else {
+        console.error(`[CORS DEBUG] Blocked origin: ${origin}. It is not in the allowed list.`);
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -57,7 +69,6 @@ setupSocketEvents(io, rooms, Player);
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🎮 Agawan Base Server running on port ${PORT}`);
-  console.log(`   - Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 
 // --- Graceful Shutdown ---

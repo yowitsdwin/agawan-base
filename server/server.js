@@ -48,9 +48,9 @@ app.get('/health', (req, res) => {
 // For local development, this serves the client's index.html file.
 // In production, this part is not used as the frontend is on GitHub Pages.
 if (process.env.NODE_ENV !== 'production') {
-    app.use(express.static(path.join(__dirname, '../client')));
+    app.use(express.static(path.join(__dirname, '../docs')));
     app.get('*', (req, res) => {
-        res.sendFile(path.join(__dirname, '../client/index.html'));
+        res.sendFile(path.join(__dirname, '../docs/index.html'));
     });
 }
 

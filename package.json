@@ -4,10 +4,10 @@
   "description": "Multiplayer Filipino Agawan Base game",
   "main": "server/server.js",
   "scripts": {
-  "start": "node server/server.js",
-  "dev": "nodemon server/server.js",
-  "build": "cp shared/constants.js client/js/constants.js"
-},
+    "start": "node server/server.js",
+    "dev": "nodemon server/server.js",
+    "build": "cp shared/constants.js docs/js/constants.js"
+  },
   "engines": {
     "node": ">=16.0.0"
   },
@@ -19,7 +19,14 @@
   "devDependencies": {
     "nodemon": "^3.0.1"
   },
-  "keywords": ["game", "multiplayer", "nodejs", "socket.io", "phaser"],
+  "keywords": [
+    "game",
+    "multiplayer",
+    "nodejs",
+    "socket.io",
+    "phaser"
+  ],
   "author": "Your Name",
   "license": "MIT"
 }
+

@@ -9,16 +9,19 @@ class GameScene extends Phaser.Scene {
 
   // 1. Preload: Create all visual assets programmatically
   preload() {
-    const { PLAYER_SIZE } = CONSTANTS.GAME_CONFIG;
+    // --- THIS IS THE FIX ---
+    // Use the correct global variable name: GAME_CONSTANTS
+    const { PLAYER_SIZE } = GAME_CONSTANTS.GAME_CONFIG;
+
     // Player Sprites
     this.add.graphics().fillStyle(0xff4757).fillRect(0, 0, PLAYER_SIZE, PLAYER_SIZE).generateTexture('redPlayer', PLAYER_SIZE, PLAYER_SIZE).destroy();
     this.add.graphics().fillStyle(0x5352ed).fillRect(0, 0, PLAYER_SIZE, PLAYER_SIZE).generateTexture('bluePlayer', PLAYER_SIZE, PLAYER_SIZE).destroy();
     this.add.graphics().fillStyle(0x74b9ff).fillRect(0, 0, PLAYER_SIZE, PLAYER_SIZE).generateTexture('frozenPlayer', PLAYER_SIZE, PLAYER_SIZE).destroy();
     
-    // Powerup Sprites
-    this.add.graphics().fillStyle(0x2ed573).fillCircle(16, 16, 16).generateTexture(CONSTANTS.POWERUPS.SPEED_BOOST.id, 32, 32).destroy();
-    this.add.graphics().fillStyle(0x0984e3).fillCircle(16, 16, 16).generateTexture(CONSTANTS.POWERUPS.SHIELD.id, 32, 32).destroy();
-    this.add.graphics().fillStyle(0xfdcb6e).fillCircle(16, 16, 16).generateTexture(CONSTANTS.POWERUPS.REVEAL.id, 32, 32).destroy();
+    // Powerup Sprites (Using GAME_CONSTANTS)
+    this.add.graphics().fillStyle(0x2ed573).fillCircle(16, 16, 16).generateTexture(GAME_CONSTANTS.POWERUPS.SPEED_BOOST.id, 32, 32).destroy();
+    this.add.graphics().fillStyle(0x0984e3).fillCircle(16, 16, 16).generateTexture(GAME_CONSTANTS.POWERUPS.SHIELD.id, 32, 32).destroy();
+    this.add.graphics().fillStyle(0xfdcb6e).fillCircle(16, 16, 16).generateTexture(GAME_CONSTANTS.POWERUPS.REVEAL.id, 32, 32).destroy();
     
     // Effects
     this.add.graphics().fillStyle(0xffffff).fillRect(0, 0, 8, 8).generateTexture('particle', 8, 8).destroy();
@@ -27,37 +30,33 @@ class GameScene extends Phaser.Scene {
 
   // 2. Create: Set up the scene, controls, and network listeners
   create() {
-    this.physics.world.setBounds(0, 0, CONSTANTS.MAP.WIDTH, CONSTANTS.MAP.HEIGHT);
-    this.add.rectangle(CONSTANTS.MAP.WIDTH / 2, CONSTANTS.MAP.HEIGHT / 2, CONSTANTS.MAP.WIDTH, CONSTANTS.MAP.HEIGHT, 0x2d3436);
+    this.physics.world.setBounds(0, 0, GAME_CONSTANTS.MAP.WIDTH, GAME_CONSTANTS.MAP.HEIGHT);
+    this.add.rectangle(GAME_CONSTANTS.MAP.WIDTH / 2, GAME_CONSTANTS.MAP.HEIGHT / 2, GAME_CONSTANTS.MAP.WIDTH, GAME_CONSTANTS.MAP.HEIGHT, 0x2d3436);
     
-    // NEW: Add a visible border for the game area
-    this.add.rectangle(0, 0, CONSTANTS.MAP.WIDTH, CONSTANTS.MAP.HEIGHT).setOrigin(0).setStrokeStyle(10, 0xffffff, 0.5);
+    // Add a visible border for the game area
+    this.add.rectangle(0, 0, GAME_CONSTANTS.MAP.WIDTH, GAME_CONSTANTS.MAP.HEIGHT).setOrigin(0).setStrokeStyle(10, 0xffffff, 0.5);
 
     this.createBases();
     this.controls = new Controls(this);
     this.setupNetworkListeners();
     
-    // The main game loop, running every frame
     this.time.addEvent({ delay: 16, callback: this.gameLoop, callbackScope: this, loop: true });
   }
 
   setupNetworkListeners() {
     if (!window.networkManager) return;
 
-    // Listen for the game to start after the lobby
     window.networkManager.on('gameStarted', (roomState) => {
       window.uiManager.showScreen('gameScreen');
       this.updateGameState(roomState);
     });
 
-    // The primary listener for all real-time updates
     window.networkManager.on('roomStateUpdate', (roomState) => {
-      if (roomState.gameState === CONSTANTS.GAME_STATES.PLAYING) {
+      if (roomState.gameState === GAME_CONSTANTS.GAME_STATES.PLAYING) {
         this.updateGameState(roomState);
       }
     });
     
-    // Listeners for one-off events (visual effects)
     window.networkManager.on('playerTagged', (data) => this.handlePlayerTagged(data.tagger, data.tagged));
     window.networkManager.on('playerRescued', (data) => this.handlePlayerRescued(data.rescuer, data.rescued));
     window.networkManager.on('powerupCollected', (data) => this.removePowerup(data.powerupId));
@@ -69,28 +68,19 @@ class GameScene extends Phaser.Scene {
     if (!roomState) return;
     this.localPlayer = roomState.players.find(p => p.id === window.networkManager.socket.id);
 
-    // Sync players: add new players, update existing ones, remove disconnected ones
     const serverPlayerIds = new Set(roomState.players.map(p => p.id));
     this.players.forEach((container, id) => {
-      if (!serverPlayerIds.has(id)) {
-        this.removePlayer(id);
-      }
+      if (!serverPlayerIds.has(id)) this.removePlayer(id);
     });
 
     roomState.players.forEach(playerData => {
-      if (!this.players.has(playerData.id)) {
-        this.createPlayerSprite(playerData);
-      } else {
-        this.updatePlayerSprite(playerData);
-      }
+      if (!this.players.has(playerData.id)) this.createPlayerSprite(playerData);
+      else this.updatePlayerSprite(playerData);
     });
 
-    // Sync powerups
     const serverPowerupIds = new Set(roomState.powerups.map(p => p.id));
-     this.powerups.forEach((sprite, id) => {
-      if (!serverPowerupIds.has(id)) {
-        this.removePowerup(id);
-      }
+    this.powerups.forEach((sprite, id) => {
+      if (!serverPowerupIds.has(id)) this.removePowerup(id);
     });
     roomState.powerups.forEach(p => this.spawnPowerup(p));
   }
@@ -99,21 +89,15 @@ class GameScene extends Phaser.Scene {
   createPlayerSprite(playerData) {
     const isLocal = playerData.id === window.networkManager?.socket?.id;
     
-    // The main sprite for the player
     const sprite = this.physics.add.sprite(0, 0, this.getPlayerTexture(playerData));
-    
-    // The player's name, positioned directly above the sprite
     const nameText = this.add.text(0, -25, playerData.username, {
       fontSize: '14px', fill: isLocal ? '#ffff00' : '#ffffff',
       stroke: '#000000', strokeThickness: 3, align: 'center'
     }).setOrigin(0.5);
-
-    // The freeze timer text, initially invisible
     const freezeText = this.add.text(0, 0, '', {
       fontSize: '16px', fill: '#fff', stroke: '#000', strokeThickness: 3
     }).setOrigin(0.5);
     
-    // The container holds the sprite, name, and timer, ensuring they move together
     const container = this.add.container(playerData.x, playerData.y, [sprite, nameText, freezeText]);
     container.setSize(sprite.width, sprite.height);
     this.physics.world.enable(container);
@@ -126,9 +110,7 @@ class GameScene extends Phaser.Scene {
     
     this.players.set(playerData.id, container);
     
-    if (isLocal) {
-      this.cameras.main.startFollow(container, true, 0.1, 0.1);
-    }
+    if (isLocal) this.cameras.main.startFollow(container, true, 0.1, 0.1);
   }
 
   updatePlayerSprite(playerData) {
@@ -138,7 +120,6 @@ class GameScene extends Phaser.Scene {
     container.playerData = playerData;
     container.sprite.setTexture(this.getPlayerTexture(playerData));
 
-    // Smoothly move remote players to their new position
     if (playerData.id !== this.localPlayer?.id) {
       this.tweens.add({
         targets: container, x: playerData.x, y: playerData.y,
@@ -146,8 +127,7 @@ class GameScene extends Phaser.Scene {
       });
     }
 
-    // Update the freeze timer text
-    if (playerData.state === CONSTANTS.PLAYER_STATES.FROZEN && playerData.frozenUntil > 0) {
+    if (playerData.state === GAME_CONSTANTS.PLAYER_STATES.FROZEN && playerData.frozenUntil > 0) {
       const timeLeft = Math.max(0, (playerData.frozenUntil - Date.now()) / 1000).toFixed(1);
       container.freezeText.setText(`${timeLeft}s`);
       container.freezeText.visible = true;
@@ -170,21 +150,19 @@ class GameScene extends Phaser.Scene {
     const localContainer = this.players.get(this.localPlayer.id);
     if (!localContainer) return;
 
-    // NEW: Stop the player from moving if they are frozen
-    if (this.localPlayer.state === CONSTANTS.PLAYER_STATES.FROZEN) {
+    if (this.localPlayer.state === GAME_CONSTANTS.PLAYER_STATES.FROZEN) {
       localContainer.body.setVelocity(0, 0);
-      return; // Skip movement logic
+      return;
     }
     
     const movement = this.controls.getMovement();
-    const speed = CONSTANTS.GAME_CONFIG.PLAYER_SPEED;
+    const speed = GAME_CONSTANTS.GAME_CONFIG.PLAYER_SPEED;
     localContainer.body.setVelocity(movement.x * speed, movement.y * speed);
 
     if (localContainer.body.velocity.lengthSq() > 0) {
       window.networkManager?.updatePosition(localContainer.x, localContainer.y);
     }
     
-    // Check for powerup collection
     this.physics.overlap(localContainer, Array.from(this.powerups.values()), (playerContainer, powerupSprite) => {
       window.networkManager?.collectPowerup(powerupSprite.powerupData.id);
       this.removePowerup(powerupSprite.powerupData.id);
@@ -193,8 +171,8 @@ class GameScene extends Phaser.Scene {
 
   // 6. Helper Functions for visuals and effects
   getPlayerTexture(playerData) {
-    if (playerData.state === CONSTANTS.PLAYER_STATES.FROZEN) return 'frozenPlayer';
-    return playerData.team === CONSTANTS.TEAMS.RED ? 'redPlayer' : 'bluePlayer';
+    if (playerData.state === GAME_CONSTANTS.PLAYER_STATES.FROZEN) return 'frozenPlayer';
+    return playerData.team === GAME_CONSTANTS.TEAMS.RED ? 'redPlayer' : 'bluePlayer';
   }
   
   spawnPowerup(powerupData) {
@@ -239,10 +217,10 @@ class GameScene extends Phaser.Scene {
 
   createBases() {
     const baseTextStyle = { fontSize: '20px', align: 'center', stroke: '#000', strokeThickness: 2 };
-    this.add.circle(CONSTANTS.MAP.RED_BASE.x, CONSTANTS.MAP.RED_BASE.y, CONSTANTS.GAME_CONFIG.BASE_SIZE / 2, 0xff4757, 0.3).setStrokeStyle(4, 0xff4757);
-    this.add.text(CONSTANTS.MAP.RED_BASE.x, CONSTANTS.MAP.RED_BASE.y, 'RED\nBASE', { ...baseTextStyle, fill: '#ff4757' }).setOrigin(0.5);
-    this.add.circle(CONSTANTS.MAP.BLUE_BASE.x, CONSTANTS.MAP.BLUE_BASE.y, CONSTANTS.GAME_CONFIG.BASE_SIZE / 2, 0x5352ed, 0.3).setStrokeStyle(4, 0x5352ed);
-    this.add.text(CONSTANTS.MAP.BLUE_BASE.x, CONSTANTS.MAP.BLUE_BASE.y, 'BLUE\nBASE', { ...baseTextStyle, fill: '#5352ed' }).setOrigin(0.5);
+    this.add.circle(GAME_CONSTANTS.MAP.RED_BASE.x, GAME_CONSTANTS.MAP.RED_BASE.y, GAME_CONSTANTS.GAME_CONFIG.BASE_SIZE / 2, 0xff4757, 0.3).setStrokeStyle(4, 0xff4757);
+    this.add.text(GAME_CONSTANTS.MAP.RED_BASE.x, GAME_CONSTANTS.MAP.RED_BASE.y, 'RED\nBASE', { ...baseTextStyle, fill: '#ff4757' }).setOrigin(0.5);
+    this.add.circle(GAME_CONSTANTS.MAP.BLUE_BASE.x, GAME_CONSTANTS.MAP.BLUE_BASE.y, GAME_CONSTANTS.GAME_CONFIG.BASE_SIZE / 2, 0x5352ed, 0.3).setStrokeStyle(4, 0x5352ed);
+    this.add.text(GAME_CONSTANTS.MAP.BLUE_BASE.x, GAME_CONSTANTS.MAP.BLUE_BASE.y, 'BLUE\nBASE', { ...baseTextStyle, fill: '#5352ed' }).setOrigin(0.5);
   }
 }
 

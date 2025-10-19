@@ -29,11 +29,11 @@ class Player {
 
   resetToBase() {
     if (this.team === CONSTANTS.TEAMS.RED) {
-      this.x = CONSTANTS.MAP.RED_BASE.x;
-      this.y = CONSTANTS.MAP.RED_BASE.y;
+      this.x = CONSTANTS.MAP.redBase.x;
+      this.y = CONSTANTS.MAP.redBase.y;
     } else {
-      this.x = CONSTANTS.MAP.BLUE_BASE.x;
-      this.y = CONSTANTS.MAP.BLUE_BASE.y;
+      this.x = CONSTANTS.MAP.blueBase.x;
+      this.y = CONSTANTS.MAP.blueBase.y;
     }
     this.state = CONSTANTS.PLAYER_STATES.IN_BASE;
     this.baseExitTime = null;
@@ -58,7 +58,7 @@ class Player {
   }
 
   isInBase(team) {
-    const basePos = team === CONSTANTS.TEAMS.RED ? CONSTANTS.MAP.RED_BASE : CONSTANTS.MAP.BLUE_BASE;
+    const basePos = team === CONSTANTS.TEAMS.RED ? CONSTANTS.MAP.redBase : CONSTANTS.MAP.blueBase;
     return Math.hypot(this.x - basePos.x, this.y - basePos.y) <= CONSTANTS.GAME_CONFIG.BASE_SIZE / 2;
   }
 

@@ -11,20 +11,103 @@
 </head>
 <body>
     <div id="gameContainer">
-        <!-- Login Screen -->
-        <div id="loginScreen" class="screen">
+        <!-- Loading Screen -->
+        <div id="loadingScreen" class="screen">
+            <div class="screen-content">
+                <div class="loader"></div>
+                <h2>Connecting to Server...</h2>
+                <p id="loadingStatus">Checking server availability</p>
+            </div>
+        </div>
+
+        <!-- Main Menu Screen -->
+        <div id="mainMenuScreen" class="screen hidden">
             <div class="screen-content">
                 <h1>🎮 Agawan Base</h1>
                 <p>A Classic Filipino Multiplayer Game</p>
                 <input type="text" id="usernameInput" placeholder="Enter your name" maxlength="20">
-                <button id="joinGameBtn">Join Game</button>
+                <div class="menu-buttons">
+                    <button id="hostGameBtn" class="primary-btn">Host Game</button>
+                    <button id="joinGameBtn" class="secondary-btn">Join Game</button>
+                </div>
             </div>
         </div>
 
-        <!-- Lobby Screen (NEW) -->
-        <div id="lobbyScreen" class="screen hidden">
+        <!-- Join Lobby Screen -->
+        <div id="joinLobbyScreen" class="screen hidden">
             <div class="screen-content">
-                <h1>Game Lobby</h1>
+                <h1>Join Lobby</h1>
+                <p>Enter the lobby code to join</p>
+                <input type="text" id="lobbyCodeInput" placeholder="Enter 6-digit code" maxlength="6" style="text-transform: uppercase;">
+                <div class="menu-buttons">
+                    <button id="confirmJoinBtn" class="primary-btn">Join</button>
+                    <button id="backToMenuBtn" class="secondary-btn">Back</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Host Settings Screen -->
+        <div id="hostSettingsScreen" class="screen hidden">
+            <div class="screen-content">
+                <h1>Host Game Settings</h1>
+                
+                <div class="settings-group">
+                    <label>Map Selection:</label>
+                    <select id="mapSelect">
+                        <option value="classic">Classic Field</option>
+                        <option value="forest">Forest Arena</option>
+                        <option value="desert">Desert Wasteland</option>
+                    </select>
+                </div>
+
+                <div class="settings-group">
+                    <label>Winning Score:</label>
+                    <select id="winningScoreSelect">
+                        <option value="3">3 Points</option>
+                        <option value="5">5 Points</option>
+                        <option value="7">7 Points</option>
+                        <option value="10">10 Points</option>
+                    </select>
+                </div>
+
+                <div class="settings-group">
+                    <label>Game Mode:</label>
+                    <select id="gameModeSelect">
+                        <option value="day">Day Mode</option>
+                        <option value="night">Night Mode (Flashlight)</option>
+                    </select>
+                </div>
+
+                <div class="menu-buttons">
+                    <button id="createLobbyBtn" class="primary-btn">Create Lobby</button>
+                    <button id="backToMenuFromHostBtn" class="secondary-btn">Back</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lobby Screen -->
+        <div id="lobbyScreen" class="screen hidden">
+            <div class="screen-content lobby-content">
+                <div class="lobby-header">
+                    <h1>Game Lobby</h1>
+                    <div class="lobby-code">
+                        <span>Lobby Code:</span>
+                        <span id="lobbyCodeDisplay" class="code-display">------</span>
+                        <button id="copyLobbyCodeBtn" class="icon-btn" title="Copy Code">📋</button>
+                    </div>
+                </div>
+
+                <!-- Host Settings Display -->
+                <div id="lobbySettingsPanel" class="lobby-settings">
+                    <h3>Game Settings</h3>
+                    <div class="settings-display">
+                        <span>Map: <strong id="currentMap">Classic Field</strong></span>
+                        <span>Score: <strong id="currentScore">3</strong></span>
+                        <span>Mode: <strong id="currentMode">Day</strong></span>
+                    </div>
+                    <button id="editSettingsBtn" class="small-btn hidden">Edit Settings</button>
+                </div>
+
                 <div class="lobby-teams-container">
                     <div class="lobby-team-panel" id="lobbyRedTeam">
                         <h2>Red Team</h2>
@@ -35,11 +118,13 @@
                         <ul></ul>
                     </div>
                 </div>
+
                 <div class="lobby-controls">
                     <button id="changeTeamBtn">Change Team</button>
                     <button id="readyBtn">Ready</button>
+                    <button id="leaveLobbyBtn" class="danger-btn">Leave Lobby</button>
                 </div>
-                <p id="waitingMessage">Waiting for players to ready up...</p>
+                <p id="waitingMessage">Waiting for all players to ready up...</p>
             </div>
         </div>
 
@@ -58,9 +143,17 @@
                         <span class="score" id="blueScore">0</span>
                     </div>
                 </div>
-                <!-- Chat UI with Toggle -->
+
+                <!-- Leaderboard -->
+                <div id="leaderboard" class="hidden">
+                    <h3>Leaderboard</h3>
+                    <div id="leaderboardContent"></div>
+                </div>
+                <button id="toggleLeaderboardBtn" class="icon-btn">🏆</button>
+
+                <!-- Chat UI -->
                 <div id="chat-ui-container">
-                    <button id="chatToggleBtn">💬</button>
+                    <button id="chatToggleBtn" class="icon-btn">💬</button>
                     <div id="chatContainer" class="hidden">
                         <div id="chatMessages"></div>
                         <div id="chatInput">
@@ -83,17 +176,19 @@
 
         <!-- Game Over Screen -->
         <div id="gameOverScreen" class="screen hidden">
-             <div class="screen-content">
+            <div class="screen-content">
                 <h1 id="gameOverTitle">Game Over!</h1>
                 <div id="gameOverStats"></div>
-                <button id="playAgainBtn">Play Again</button>
+                <div class="menu-buttons">
+                    <button id="playAgainBtn" class="primary-btn">Play Again</button>
+                    <button id="mainMenuBtn" class="secondary-btn">Main Menu</button>
+                </div>
             </div>
         </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.70.0/phaser.min.js"></script>
-    <!-- <script src="../shared/constants.js"></script> -->
     <script src="js/constants.js"></script>
     <script src="js/NetworkManager.js"></script>
     <script src="js/Controls.js"></script>

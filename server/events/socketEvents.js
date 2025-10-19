@@ -1,36 +1,112 @@
-const CONSTANTS = require('../../shared/constants');
-const Room = require('../Room');
+// server/events/socketEvents.js
+// Comprehensive socket event handling with lobby system
 
-function setupSocketEvents(io, rooms, Player) {
+const CONSTANTS = require('../../shared/constants');
+
+function setupSocketEvents(io, lobbyManager, Player) {
   io.on('connection', (socket) => {
     let currentPlayer = null;
     let currentRoom = null;
 
-    // --- Connection and Lobby Events ---
+    console.log(`[Socket] Player connected: ${socket.id}`);
 
-    socket.on('joinGame', (data) => {
+    // ==================== LOBBY EVENTS ====================
+
+    socket.on('createLobby', (data) => {
       try {
-        const roomId = 'main'; // All players join the same main room for now
+        const username = sanitizeUsername(data.username, socket.id);
+        const settings = {
+          map: data.settings?.map || 'classic',
+          winningScore: data.settings?.winningScore || CONSTANTS.GAME_CONFIG.DEFAULT_WINNING_SCORE,
+          gameMode: data.settings?.gameMode || CONSTANTS.GAME_MODES.DAY
+        };
 
-        // Sanitize username to prevent errors and ensure it's valid
-        let username = (data.username || `Player_${socket.id.substr(0, 4)}`).substring(0, 20).trim();
-        if (!username) {
-          username = `Player_${socket.id.substr(0, 4)}`;
-        }
-
-        if (!rooms.has(roomId)) {
-          rooms.set(roomId, new Room(roomId));
-        }
+        const { lobbyId, lobby } = lobbyManager.createLobby(socket.id, username, settings);
         
-        currentRoom = rooms.get(roomId);
+        currentRoom = lobby;
         currentPlayer = new Player(socket.id, socket, username);
         
-        currentRoom.addPlayer(currentPlayer);
-        socket.join(roomId);
-
+        if (currentRoom.addPlayer(currentPlayer)) {
+          socket.join(lobbyId);
+          socket.emit('lobbyCreated', { 
+            lobbyId, 
+            roomState: currentRoom.getRoomState() 
+          });
+          console.log(`[Lobby] ${username} created lobby ${lobbyId}`);
+        }
       } catch (error) {
-        console.error(`[joinGame] Error for socket ${socket.id}:`, error);
-        socket.emit('serverError', { message: 'An error occurred while joining the game.' });
+        console.error(`[createLobby] Error:`, error);
+        socket.emit('serverError', { 
+          message: error.message || 'Failed to create lobby',
+          code: 'CREATE_LOBBY_FAILED'
+        });
+      }
+    });
+
+    socket.on('joinLobby', (data) => {
+      try {
+        const lobbyId = data.lobbyId?.toUpperCase().trim();
+        const username = sanitizeUsername(data.username, socket.id);
+
+        if (!lobbyId || lobbyId.length !== CONSTANTS.LOBBY.ID_LENGTH) {
+          socket.emit('serverError', { 
+            message: 'Invalid lobby code',
+            code: 'INVALID_LOBBY_CODE'
+          });
+          return;
+        }
+
+        const lobby = lobbyManager.getLobby(lobbyId);
+        if (!lobby) {
+          socket.emit('serverError', { 
+            message: 'Lobby not found',
+            code: 'LOBBY_NOT_FOUND'
+          });
+          return;
+        }
+
+        currentRoom = lobby;
+        currentPlayer = new Player(socket.id, socket, username);
+        
+        if (currentRoom.addPlayer(currentPlayer)) {
+          socket.join(lobbyId);
+          socket.emit('lobbyJoined', { 
+            lobbyId, 
+            roomState: currentRoom.getRoomState() 
+          });
+          console.log(`[Lobby] ${username} joined lobby ${lobbyId}`);
+        }
+      } catch (error) {
+        console.error(`[joinLobby] Error:`, error);
+        socket.emit('serverError', { 
+          message: error.message || 'Failed to join lobby',
+          code: 'JOIN_LOBBY_FAILED'
+        });
+      }
+    });
+
+    socket.on('updateLobbySettings', (data) => {
+      try {
+        if (!currentRoom || !currentPlayer) return;
+        
+        // Only host can change settings
+        if (currentPlayer.id !== currentRoom.settings.hostId) {
+          socket.emit('serverError', { 
+            message: 'Only the host can change settings',
+            code: 'NOT_HOST'
+          });
+          return;
+        }
+
+        const result = currentRoom.updateLobbySettings(data.settings);
+        if (!result.success) {
+          socket.emit('serverError', { 
+            message: result.message,
+            code: 'SETTINGS_UPDATE_FAILED'
+          });
+        }
+      } catch (error) {
+        console.error(`[updateLobbySettings] Error:`, error);
       }
     });
 
@@ -40,7 +116,7 @@ function setupSocketEvents(io, rooms, Player) {
           currentRoom.changeTeam(currentPlayer.id);
         }
       } catch (error) {
-        console.error(`[changeTeam] Error for socket ${socket.id}:`, error);
+        console.error(`[changeTeam] Error:`, error);
       }
     });
 
@@ -50,27 +126,30 @@ function setupSocketEvents(io, rooms, Player) {
           currentRoom.setPlayerReady(currentPlayer.id);
         }
       } catch (error) {
-        console.error(`[playerReady] Error for socket ${socket.id}:`, error);
+        console.error(`[playerReady] Error:`, error);
       }
     });
 
-    // --- In-Game Action Events ---
+    // ==================== GAME EVENTS ====================
 
     socket.on('updatePosition', (data) => {
-      // Anti-cheat movement validation
-      if (currentPlayer && currentRoom && data && typeof data.x === 'number' && typeof data.y === 'number') {
-        const now = Date.now();
-        const deltaTime = (now - currentPlayer.lastUpdate) / 1000;
-        const distance = Math.hypot(data.x - currentPlayer.x, data.y - currentPlayer.y);
-        const maxDistance = CONSTANTS.GAME_CONFIG.PLAYER_SPEED * deltaTime * 1.15; // 15% latency buffer
-        
-        if (distance > maxDistance && deltaTime > 0) {
-            return; // Ignore the invalid move
-        }
-
-        currentPlayer.updatePosition(data.x, data.y);
-        currentPlayer.lastUpdate = now;
+      if (!currentPlayer || !currentRoom || !data || 
+          typeof data.x !== 'number' || typeof data.y !== 'number') {
+        return;
       }
+
+      const now = Date.now();
+      const deltaTime = (now - currentPlayer.lastUpdate) / 1000;
+      const distance = Math.hypot(data.x - currentPlayer.x, data.y - currentPlayer.y);
+      const maxDistance = CONSTANTS.GAME_CONFIG.PLAYER_SPEED * 
+                          currentPlayer.speedMultiplier * deltaTime * 1.15;
+      
+      if (distance > maxDistance && deltaTime > 0) {
+        return; // Anti-cheat: ignore invalid movement
+      }
+
+      currentPlayer.updatePosition(data.x, data.y);
+      currentPlayer.lastUpdate = now;
     });
 
     socket.on('rescuePlayer', (data) => {
@@ -81,8 +160,8 @@ function setupSocketEvents(io, rooms, Player) {
             currentRoom.gameLogic.handleRescue(currentPlayer, targetPlayer);
           }
         }
-      } catch(error) {
-        console.error(`[rescuePlayer] Error for socket ${socket.id}:`, error);
+      } catch (error) {
+        console.error(`[rescuePlayer] Error:`, error);
       }
     });
     
@@ -90,64 +169,81 @@ function setupSocketEvents(io, rooms, Player) {
       try {
         if (currentPlayer && currentRoom && data && data.powerupId) {
           if (currentRoom.powerups.has(data.powerupId)) {
-            const powerup = CONSTANTS.POWERUPS[Object.keys(CONSTANTS.POWERUPS).find(key => CONSTANTS.POWERUPS[key].id === data.powerupType)];
+            const powerupType = data.powerupType;
+            const powerup = CONSTANTS.POWERUPS[
+              Object.keys(CONSTANTS.POWERUPS).find(
+                key => CONSTANTS.POWERUPS[key].id === powerupType
+              )
+            ];
+            
             if (powerup) {
               currentPlayer.addPowerup(powerup);
             }
+            
             currentRoom.powerups.delete(data.powerupId);
-            currentRoom.broadcast('powerupCollected', { playerId: currentPlayer.id, powerupId: data.powerupId });
+            currentRoom.broadcast('powerupCollected', { 
+              playerId: currentPlayer.id, 
+              powerupId: data.powerupId 
+            });
           }
         }
       } catch (error) {
-        console.error(`[collectPowerup] Error for socket ${socket.id}:`, error);
+        console.error(`[collectPowerup] Error:`, error);
       }
     });
+
+    // ==================== CHAT EVENTS ====================
 
     socket.on('chatMessage', (data) => {
       try {
-        if (currentPlayer && currentRoom && data && typeof data.message === 'string') {
-          const message = data.message.substring(0, 100).trim();
-          const type = (data.type === 'team') ? 'team' : 'global';
-          if (message.length === 0) return;
-          
-          const messageData = {
-            username: currentPlayer.username, team: currentPlayer.team,
-            message: message, type: type, timestamp: Date.now()
-          };
-          
-          if (type === 'team') {
-            currentRoom.players.forEach(p => {
-              if (p.team === currentPlayer.team) p.socket.emit('chatMessage', messageData);
-            });
-          } else {
-            currentRoom.broadcast('chatMessage', messageData);
-          }
+        if (!currentPlayer || !currentRoom || !data || 
+            typeof data.message !== 'string') {
+          return;
         }
+
+        const message = data.message.substring(0, CONSTANTS.VALIDATION.MESSAGE_MAX_LENGTH).trim();
+        const type = (data.type === 'team') ? 'team' : 'global';
+        
+        if (message.length === 0) return;
+
+        currentRoom.addChatMessage(currentPlayer.id, message, type);
       } catch (error) {
-        console.error(`[chatMessage] Error for socket ${socket.id}:`, error);
+        console.error(`[chatMessage] Error:`, error);
       }
     });
 
-    // --- Disconnect Event ---
+    // ==================== DISCONNECT EVENT ====================
 
     socket.on('disconnect', () => {
-      console.log('Player disconnected:', socket.id);
+      console.log(`[Socket] Player disconnected: ${socket.id}`);
+      
       try {
         if (currentPlayer && currentRoom) {
           currentRoom.removePlayer(currentPlayer.id);
           
-          // If the room becomes empty, clean it up from the server's memory
+          // Clean up empty lobbies
           if (currentRoom.players.size === 0) {
-            currentRoom.cleanup();
-            rooms.delete(currentRoom.id);
+            lobbyManager.deleteLobby(currentRoom.id);
           }
         }
       } catch (error) {
-        console.error(`[disconnect] Error for socket ${socket.id}:`, error);
+        console.error(`[disconnect] Error:`, error);
       }
     });
   });
 }
 
-module.exports = setupSocketEvents;
+// Helper function to sanitize username
+function sanitizeUsername(username, socketId) {
+  let sanitized = (username || `Player_${socketId.substr(0, 4)}`)
+    .substring(0, CONSTANTS.VALIDATION.USERNAME_MAX_LENGTH)
+    .trim();
+  
+  if (sanitized.length < CONSTANTS.VALIDATION.USERNAME_MIN_LENGTH) {
+    sanitized = `Player_${socketId.substr(0, 4)}`;
+  }
+  
+  return sanitized;
+}
 
+module.exports = setupSocketEvents;

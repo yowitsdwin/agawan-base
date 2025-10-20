@@ -67,10 +67,8 @@ class NetworkManager {
         this.isConnected = false;
         this.connectionPromise = null;
         
-        if (reason === 'io server disconnect') {
-          // Server forcibly disconnected, don't auto-reconnect
-          this.handleDisconnect('Server closed the connection');
-        }
+        // The server has disconnected us. Show the error and stop the game.
+        this.handleDisconnect(reason);
       });
 
       this.socket.on('connect_error', (error) => {
@@ -220,9 +218,16 @@ class NetworkManager {
   // ==================== UTILITY METHODS ====================
 
   handleDisconnect(reason) {
+    // Pause the game to stop the console spam and player movement
+    if (window.game && window.game.scene.isActive('GameScene')) {
+      window.game.scene.pause('GameScene');
+    }
+
     if (window.uiManager) {
+      // Provide a more user-friendly message
+      const message = `Lost connection to the server. Reason: ${reason}. The page will reload.`;
       window.uiManager.showError(
-        `Disconnected: ${reason}`,
+        message,
         'Connection Lost',
         () => window.location.reload()
       );

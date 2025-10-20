@@ -39,6 +39,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Setup network event listeners
   setupNetworkEvents();
 
+  if (!window.game) {
+    console.log('[Main] Creating Phaser game instance...');
+    window.game = new Phaser.Game(gameConfig);
+  }
+
   console.log('✅ Client initialization complete');
 });
 
@@ -71,16 +76,9 @@ function setupNetworkEvents() {
     if (roomState.gameState === GAME_CONSTANTS.GAME_STATES.LOBBY) {
       window.uiManager.updateLobby(roomState);
     } else if (roomState.gameState === GAME_CONSTANTS.GAME_STATES.PLAYING) {
+      // Only update UI, GameScene will handle its own updates
       window.uiManager.updateGameUI(roomState);
     }
-  });
-  
-  // Game start
-  window.networkManager.on('gameStarted', (roomState) => {
-    if (!window.game) {
-      window.game = new Phaser.Game(gameConfig);
-    }
-    window.uiManager.showScreen('gameScreen');
   });
 
   // Chat messages

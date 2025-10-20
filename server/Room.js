@@ -68,7 +68,10 @@ class Room {
       return false;
     }
     
+    // Set room reference BEFORE setting team (needed for resetToBase)
+    player.setRoom(this);
     this.players.set(player.id, player);
+    
     const redCount = this.getTeamCount(CONSTANTS.TEAMS.RED);
     const blueCount = this.getTeamCount(CONSTANTS.TEAMS.BLUE);
     player.setTeam(redCount <= blueCount ? CONSTANTS.TEAMS.RED : CONSTANTS.TEAMS.BLUE);

@@ -148,7 +148,7 @@ function setupSocketEvents(io, lobbyManager, Player) {
         return; // Anti-cheat: ignore invalid movement
       }
 
-      currentPlayer.updatePosition(data.x, data.y);
+      currentPlayer.updatePosition(data.x, data.y, data.direction);
       currentPlayer.lastUpdate = now;
     });
 

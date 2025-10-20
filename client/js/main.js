@@ -74,6 +74,12 @@ function setupNetworkEvents() {
   // Room state updates
   window.networkManager.on('roomStateUpdate', (roomState) => {
     if (roomState.gameState === GAME_CONSTANTS.GAME_STATES.LOBBY) {
+      
+      // If we are on the game over screen, switch to the lobby screen
+      if (!window.uiManager.elements.gameOverScreen.classList.contains('hidden')) {
+        window.uiManager.showScreen('lobbyScreen');
+      }
+
       window.uiManager.updateLobby(roomState);
     } else if (roomState.gameState === GAME_CONSTANTS.GAME_STATES.PLAYING) {
       // Only update UI, GameScene will handle its own updates
@@ -81,6 +87,20 @@ function setupNetworkEvents() {
     }
   });
 
+  window.networkManager.on('gameStarted', (roomState) => {
+    console.log('[Main] gameStarted event caught.');
+    
+    // *** ADD THIS: Trigger fullscreen on game start for mobile ***
+    if (window.uiManager && window.uiManager.isMobile) {
+      window.uiManager.requestFullScreen();
+    }
+
+    // Store the roomState for the scene to pick up
+    window.pendingGameStart = roomState;
+
+    // We can still tell the UI to switch screens
+    window.uiManager.showScreen('gameScreen');
+  });
   // Chat messages
   window.networkManager.on('chatMessage', (messageData) => {
     window.uiManager.addChatMessage(messageData);

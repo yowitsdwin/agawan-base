@@ -175,10 +175,10 @@ class GameLogic {
       playerStats: this.getPlayerStats()
     });
 
-    // Don't cleanup immediately, let players see the results
+    // Instead of cleaning up, reset to lobby after 10 seconds
     setTimeout(() => {
-      this.room.cleanup();
-    }, 30000); // 30 seconds to view results
+      this.room.resetToLobby();
+    }, 10000); // 10 seconds to view results
   }
 
   getPlayerStats() {

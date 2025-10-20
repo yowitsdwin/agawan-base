@@ -82,16 +82,43 @@ class GameScene extends Phaser.Scene {
   }
 
   create() {
-    // Will be set when game starts with proper map config
     this.controls = new Controls(this);
-    this.setupNetworkListeners();
+    this.setupNetworkListeners(); // This is already here
     
     this.time.addEvent({ 
       delay: 16, 
       callback: this.gameLoop, 
       callbackScope: this, 
       loop: true 
-    });
+    }); // This is already here
+    
+    // *** ADD THIS CHECK AT THE END OF create() ***
+    // Check if the gameStarted event fired before this scene was ready
+    if (window.pendingGameStart) {
+      console.log('[GameScene] Found pending game start, initializing...');
+      
+      // Manually trigger the start-game logic
+      const roomState = window.pendingGameStart;
+      this.initializeMap(roomState.settings.map, roomState.settings.gameMode);
+      this.updateGameState(roomState);
+      
+      // Clear the pending state so it doesn't run twice
+      window.pendingGameStart = null;
+    }
+  }
+
+  pauseKeyboard() {
+    // Stops Phaser from capturing all keyboard events
+    if (this.input && this.input.keyboard) {
+      this.input.keyboard.disableGlobalCapture();
+    }
+  }
+
+  resumeKeyboard() {
+    // Allows Phaser to capture keyboard events again
+    if (this.input && this.input.keyboard) {
+      this.input.keyboard.enableGlobalCapture();
+    }
   }
 
   initializeMap(mapId, gameMode) {
@@ -104,6 +131,9 @@ class GameScene extends Phaser.Scene {
 
     // Set world bounds
     this.physics.world.setBounds(0, 0, this.mapConfig.width, this.mapConfig.height);
+
+    // *** ADD THIS LINE ***
+    this.obstaclesGroup = this.physics.add.staticGroup();
 
     // Create background
     this.add.rectangle(
@@ -144,7 +174,7 @@ class GameScene extends Phaser.Scene {
         0.8
       );
       obstacleSprite.setStrokeStyle(2, 0x5c2e0a);
-      this.physics.add.existing(obstacleSprite, true); // true = static body
+      this.obstaclesGroup.add(obstacleSprite);
     });
   }
 
@@ -196,17 +226,19 @@ class GameScene extends Phaser.Scene {
   }
 
   setupNightMode() {
-    // Create dark overlay
+    // Create dark overlay (85% opacity black)
     this.nightOverlay = this.add.rectangle(
       0, 0, 
       this.mapConfig.width, 
       this.mapConfig.height, 
       0x000000, 
-      0.85
+      0.85 // Dim, not solid black
     ).setOrigin(0).setDepth(1000);
 
-    // Create flashlight graphics
+    // Create flashlight graphics (it's just a visual effect now)
     this.flashlightGraphics = this.add.graphics().setDepth(1001);
+    
+    // No mask code is needed
   }
 
   updateFlashlight() {
@@ -220,27 +252,21 @@ class GameScene extends Phaser.Scene {
 
     this.flashlightGraphics.clear();
 
-    // Get mouse/pointer position for flashlight direction
-    const pointer = this.input.activePointer;
-    const angle = Phaser.Math.Angle.Between(
-      localContainer.x, 
-      localContainer.y, 
-      pointer.worldX, 
-      pointer.worldY
-    );
+    // Get aim direction from controls
+    const direction = this.controls.getFlashlightDirection();
+    const flashlightAngle = Math.atan2(direction.y, direction.x);
 
-    // Draw flashlight cone
-    this.flashlightGraphics.fillStyle(0xffffff, 0.3);
+    // --- 1. Draw the visual flashlight cone ---
+    this.flashlightGraphics.fillStyle(0xffffff, 0.3); // 30% opacity white cone
     this.flashlightGraphics.beginPath();
     this.flashlightGraphics.moveTo(localContainer.x, localContainer.y);
     
     const angleSpread = Phaser.Math.DegToRad(GAME_CONSTANTS.GAME_CONFIG.FLASHLIGHT_ANGLE / 2);
     const distance = GAME_CONSTANTS.GAME_CONFIG.FLASHLIGHT_DISTANCE;
     
-    // Create arc for flashlight
     const numSegments = 20;
     for (let i = 0; i <= numSegments; i++) {
-      const segmentAngle = angle - angleSpread + (angleSpread * 2 * i / numSegments);
+      const segmentAngle = flashlightAngle - angleSpread + (angleSpread * 2 * i / numSegments);
       const x = localContainer.x + Math.cos(segmentAngle) * distance;
       const y = localContainer.y + Math.sin(segmentAngle) * distance;
       this.flashlightGraphics.lineTo(x, y);
@@ -249,20 +275,69 @@ class GameScene extends Phaser.Scene {
     this.flashlightGraphics.closePath();
     this.flashlightGraphics.fillPath();
 
-    // Add central bright spot
-    this.flashlightGraphics.fillStyle(0xffffff, 0.2);
+    // Add central bright spot (ambient visibility)
+    this.flashlightGraphics.fillStyle(0xffffff, 0.2); // 20% opacity white circle
     this.flashlightGraphics.fillCircle(
       localContainer.x, 
       localContainer.y, 
       GAME_CONSTANTS.GAME_CONFIG.NIGHT_VISION_RADIUS
     );
+
+    // --- 2. Check visibility for other entities ---
+    const ambientRadius = GAME_CONSTANTS.GAME_CONFIG.NIGHT_VISION_RADIUS;
+
+    // Check players
+    this.players.forEach((playerContainer, id) => {
+      // Skip the local player (always visible)
+      if (id === this.localPlayer.id) return;
+      
+      const isVisible = this.isTargetInLight(localContainer, playerContainer, flashlightAngle, angleSpread, distance, ambientRadius);
+      playerContainer.setVisible(isVisible);
+    });
+    
+    // Check powerups
+    this.powerups.forEach((powerupSprite) => {
+      const isVisible = this.isTargetInLight(localContainer, powerupSprite, flashlightAngle, angleSpread, distance, ambientRadius);
+      powerupSprite.setVisible(isVisible);
+    });
+  }
+
+  isTargetInLight(localContainer, target, flashlightAngle, angleSpread, coneDistance, ambientRadius) {
+    const dist = Phaser.Math.Distance.Between(localContainer.x, localContainer.y, target.x, target.y);
+
+    // 1. Check if it's in the ambient "close" radius
+    if (dist < ambientRadius) {
+      return true;
+    }
+
+    // 2. Check if it's too far for the main cone
+    if (dist > coneDistance) {
+      return false;
+    }
+
+    // 3. Check if it's within the flashlight cone angle
+    const angleToTarget = Phaser.Math.Angle.Between(localContainer.x, localContainer.y, target.x, target.y);
+    const angleDiff = Phaser.Math.Angle.Wrap(angleToTarget - flashlightAngle);
+
+    if (Math.abs(angleDiff) < angleSpread) {
+      return true;
+    }
+
+    // Not in ambient or cone
+    return false;
   }
 
   setupNetworkListeners() {
     if (!window.networkManager) return;
 
     window.networkManager.on('gameStarted', (roomState) => {
+      // *** REMOVE THIS LINE ***
       window.uiManager.showScreen('gameScreen');
+      
+      // Clear the pending state...
+      if (window.pendingGameStart) { // (This is from a previous fix)
+        window.pendingGameStart = null;
+      }
       this.initializeMap(roomState.settings.map, roomState.settings.gameMode);
       this.updateGameState(roomState);
     });
@@ -375,6 +450,9 @@ class GameScene extends Phaser.Scene {
     container.setSize(GAME_CONSTANTS.GAME_CONFIG.PLAYER_SIZE, GAME_CONSTANTS.GAME_CONFIG.PLAYER_SIZE);
     this.physics.world.enable(container);
     container.body.setCollideWorldBounds(true);
+
+    // *** ADD THIS LINE to make the player collide with obstacles ***
+    this.physics.add.collider(container, this.obstaclesGroup);
     
     container.sprite = sprite;
     container.nameText = nameText;
@@ -390,6 +468,11 @@ class GameScene extends Phaser.Scene {
     // Set depth based on night mode
     const depth = this.gameMode === GAME_CONSTANTS.GAME_MODES.NIGHT ? 1002 : 10;
     container.setDepth(depth);
+
+    if (this.gameMode === GAME_CONSTANTS.GAME_MODES.NIGHT) {
+      // Hide all players by default, except the local one
+      container.setVisible(isLocal);
+    }
     
     this.players.set(playerData.id, container);
     
@@ -558,6 +641,7 @@ class GameScene extends Phaser.Scene {
     
     if (this.gameMode === GAME_CONSTANTS.GAME_MODES.NIGHT) {
       sprite.setDepth(1002);
+      sprite.setVisible(false);
     }
     
     this.tweens.add({ 

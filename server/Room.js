@@ -28,6 +28,41 @@ class Room {
     this.startGameLoop();
   }
 
+  // *** ADD THIS NEW HELPER FUNCTION ***
+  isInvalidSpawn(x, y, mapConfig) {
+    const powerupRadius = 16; // Approx. powerup size
+
+    // Check bases
+    const baseRadius = CONSTANTS.GAME_CONFIG.BASE_SIZE / 2;
+    if (Math.hypot(x - mapConfig.redBase.x, y - mapConfig.redBase.y) < baseRadius + powerupRadius) {
+      return true; // Too close to red base
+    }
+    if (Math.hypot(x - mapConfig.blueBase.x, y - mapConfig.blueBase.y) < baseRadius + powerupRadius) {
+      return true; // Too close to blue base
+    }
+    
+    // Check obstacles
+    if (mapConfig.obstacles) {
+      for (const obstacle of mapConfig.obstacles) {
+        const obHalfWidth = obstacle.width / 2;
+        const obHalfHeight = obstacle.height / 2;
+        const obLeft = obstacle.x - obHalfWidth;
+        const obRight = obstacle.x + obHalfWidth;
+        const obTop = obstacle.y - obHalfHeight;
+        const obBottom = obstacle.y + obHalfHeight;
+
+        const closestX = Math.max(obLeft, Math.min(x, obRight));
+        const closestY = Math.max(obTop, Math.min(y, obBottom));
+        const distance = Math.hypot(x - closestX, y - closestY);
+        
+        if (distance < powerupRadius) {
+          return true; // Colliding with obstacle
+        }
+      }
+    }
+    return false; // Valid spawn
+  }
+
   startGameLoop() {
     if (this.gameLoopInterval) clearInterval(this.gameLoopInterval);
     
@@ -235,19 +270,31 @@ class Room {
       .sort((a, b) => b.score - a.score);
   }
 
+  // *** REPLACE updatePowerups() ***
   updatePowerups() {
     if (this.powerups.size < 3 && Math.random() < 0.01) {
       const powerupTypes = Object.values(CONSTANTS.POWERUPS);
       const type = powerupTypes[Math.floor(Math.random() * powerupTypes.length)];
-      const mapConfig = CONSTANTS.MAPS[this.settings.map.toUpperCase()];
       
-      const powerup = {
-        id: Date.now() + Math.random(),
-        type: type.id,
-        x: 150 + Math.random() * (mapConfig.width - 300),
-        y: 100 + Math.random() * (mapConfig.height - 200)
-      };
+      const mapKey = this.settings.map.toUpperCase();
+      const mapConfig = CONSTANTS.MAPS[mapKey] || CONSTANTS.MAPS.CLASSIC;
       
+      let powerup;
+      let attempts = 0;
+      
+      // Try 20 times to find a valid spawn location
+      do {
+        powerup = {
+          id: Date.now() + Math.random(),
+          type: type.id,
+          x: 150 + Math.random() * (mapConfig.width - 300),
+          y: 100 + Math.random() * (mapConfig.height - 200)
+        };
+        attempts++;
+      } while (attempts < 20 && this.isInvalidSpawn(powerup.x, powerup.y, mapConfig));
+      
+      if (attempts >= 20) return; // Failed to find a spot, try again later
+
       this.powerups.set(powerup.id, powerup);
       this.broadcast('powerupSpawned', powerup);
     }
@@ -288,6 +335,26 @@ class Room {
     this.players.clear();
     this.powerups.clear();
     console.log(`[Room ${this.id}] Cleaned up`);
+  }
+
+  resetToLobby() {
+    this.gameState = CONSTANTS.GAME_STATES.LOBBY;
+    this.gameStartTime = null;
+    this.teamScores = { red: 0, blue: 0 };
+    this.powerups.clear();
+    
+    // Reset all players
+    this.players.forEach(player => {
+      player.unready(); // Set everyone to unready
+      player.resetToBase(); // Puts them back at their base
+      player.score = 0;
+      player.tags = 0;
+      player.rescues = 0;
+    });
+    
+    console.log(`[Room ${this.id}] Reset to lobby.`);
+    // Broadcast the new lobby state
+    this.broadcast('roomStateUpdate', this.getRoomState());
   }
 }
 

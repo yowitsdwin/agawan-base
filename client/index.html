@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agawan Base - Multiplayer Game</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>🎮 Agawan Base - Multiplayer Game</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
@@ -11,7 +11,6 @@
 </head>
 <body>
     <div id="gameContainer">
-        <!-- Loading Screen -->
         <div id="loadingScreen" class="screen">
             <div class="screen-content">
                 <div class="loader"></div>
@@ -20,7 +19,6 @@
             </div>
         </div>
 
-        <!-- Main Menu Screen -->
         <div id="mainMenuScreen" class="screen hidden">
             <div class="screen-content">
                 <h1>🎮 Agawan Base</h1>
@@ -33,7 +31,6 @@
             </div>
         </div>
 
-        <!-- Join Lobby Screen -->
         <div id="joinLobbyScreen" class="screen hidden">
             <div class="screen-content">
                 <h1>Join Lobby</h1>
@@ -46,7 +43,6 @@
             </div>
         </div>
 
-        <!-- Host Settings Screen -->
         <div id="hostSettingsScreen" class="screen hidden">
             <div class="screen-content">
                 <h1>Host Game Settings</h1>
@@ -85,7 +81,6 @@
             </div>
         </div>
 
-        <!-- Lobby Screen -->
         <div id="lobbyScreen" class="screen hidden">
             <div class="screen-content lobby-content">
                 <div class="lobby-header">
@@ -97,7 +92,6 @@
                     </div>
                 </div>
 
-                <!-- Host Settings Display -->
                 <div id="lobbySettingsPanel" class="lobby-settings">
                     <h3>Game Settings</h3>
                     <div class="settings-display">
@@ -128,10 +122,8 @@
             </div>
         </div>
 
-        <!-- Game Screen -->
         <div id="gameScreen" class="screen hidden">
             <div id="gameUI">
-                <!-- Scoreboard and Timer -->
                 <div id="scoreboard">
                     <div class="team-score red-team">
                         <span class="team-name">Red</span>
@@ -142,16 +134,13 @@
                         <span class="team-name">Blue</span>
                         <span class="score" id="blueScore">0</span>
                     </div>
+                    <button id="toggleLeaderboardBtn" class="icon-btn">🏆</button>
                 </div>
 
-                <!-- Leaderboard -->
                 <div id="leaderboard" class="hidden">
                     <h3>Leaderboard</h3>
                     <div id="leaderboardContent"></div>
                 </div>
-                <button id="toggleLeaderboardBtn" class="icon-btn">🏆</button>
-
-                <!-- Chat UI -->
                 <div id="chat-ui-container">
                     <button id="chatToggleBtn" class="icon-btn">💬</button>
                     <div id="chatContainer" class="hidden">
@@ -168,23 +157,33 @@
                 </div>
             </div>
             <div id="gameCanvas"></div>
+            
             <div id="mobileControls" class="mobile-only">
                 <div id="joystick-container"><div id="joystick"></div></div>
+                <div id="flashlight-joystick-container">
+                    <div id="flashlight-joystick"></div>
+                </div>
                 <button id="actionBtn" class="action-btn">Rescue</button>
             </div>
         </div>
 
-        <!-- Game Over Screen -->
         <div id="gameOverScreen" class="screen hidden">
             <div class="screen-content">
                 <h1 id="gameOverTitle">Game Over!</h1>
                 <div id="gameOverStats"></div>
                 <div class="menu-buttons">
-                    <button id="playAgainBtn" class="primary-btn">Play Again</button>
+                    <button id="playAgainBtn" class="primary-btn">Back to Lobby</button>
                     <button id="mainMenuBtn" class="secondary-btn">Main Menu</button>
                 </div>
             </div>
         </div>
+    </div>
+
+    <div id="orientation-warning">
+      <div class="screen-content">
+        <h1>Agawan Base</h1>
+        <p>Please rotate your device to landscape mode to play.</p>
+      </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>

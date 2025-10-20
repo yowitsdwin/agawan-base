@@ -25,6 +25,35 @@ class Player {
     this.room = null; // Reference to the room this player is in
   }
 
+  // *** ADD THIS NEW HELPER FUNCTION ***
+  isCollidingWithObstacle(x, y, mapConfig) {
+    if (!mapConfig.obstacles) return false;
+    
+    const playerRadius = CONSTANTS.GAME_CONFIG.PLAYER_SIZE / 2;
+    
+    for (const obstacle of mapConfig.obstacles) {
+      const obHalfWidth = obstacle.width / 2;
+      const obHalfHeight = obstacle.height / 2;
+      const obLeft = obstacle.x - obHalfWidth;
+      const obRight = obstacle.x + obHalfWidth;
+      const obTop = obstacle.y - obHalfHeight;
+      const obBottom = obstacle.y + obHalfHeight;
+
+      // Find the closest point on the rectangle to the circle's center
+      const closestX = Math.max(obLeft, Math.min(x, obRight));
+      const closestY = Math.max(obTop, Math.min(y, obBottom));
+      
+      // Calculate distance between circle center and closest point
+      const distance = Math.hypot(x - closestX, y - closestY);
+      
+      // If distance is less than radius, they are colliding
+      if (distance < playerRadius) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   setRoom(room) {
     this.room = room;
   }
@@ -59,6 +88,17 @@ class Player {
   }
 
   updatePosition(x, y, direction) {
+    // Get map config
+    if (!this.room) return;
+    const mapKey = this.room.settings.map.toUpperCase();
+    const mapConfig = CONSTANTS.MAPS[mapKey] || CONSTANTS.MAPS.CLASSIC;
+
+    // *** ADD THIS CHECK ***
+    // Check for obstacle collision
+    if (this.isCollidingWithObstacle(x, y, mapConfig)) {
+      return; // Don't update position, it's invalid
+    }
+    
     this.x = x;
     this.y = y;
     this.direction = direction || this.direction;

@@ -340,26 +340,89 @@ class GameScene extends Phaser.Scene {
   }
 
   createObstacles() {
+  try {
+    this.mapConfig.obstacles.forEach((obstacle, index) => {
+      try {
+        // Create visual rectangle
+        const obstacleRect = this.add.rectangle(
+          obstacle.x, 
+          obstacle.y, 
+          obstacle.width, 
+          obstacle.height, 
+          0x8b4513, 
+          0.8
+        );
+        obstacleRect.setStrokeStyle(2, 0x5c2e0a);
+        obstacleRect.setDepth(5); // Above background, below players
+        
+        // Create physics body
+        this.physics.world.enable(obstacleRect);
+        obstacleRect.body.setImmovable(true);
+        obstacleRect.body.moves = false;
+        
+        // Add to group for easier collision management
+        this.obstaclesGroup.add(obstacleRect);
+        
+        console.log(`[GameScene] Created obstacle ${index} at (${obstacle.x}, ${obstacle.y})`);
+      } catch (error) {
+        console.warn(`[GameScene] Failed to create obstacle ${index}:`, error);
+      }
+    });
+    console.log(`[GameScene] Created ${this.mapConfig.obstacles.length} obstacles`);
+  } catch (error) {
+    console.error('[GameScene] Obstacle creation error:', error);
+  }
+  }
+
+  createObstaclesEnhanced() {
     try {
       this.mapConfig.obstacles.forEach((obstacle, index) => {
         try {
-          const obstacleSprite = this.add.rectangle(
+          // Create main obstacle body
+          const obstacleRect = this.add.rectangle(
             obstacle.x, 
             obstacle.y, 
             obstacle.width, 
             obstacle.height, 
             0x8b4513, 
-            0.8
+            0.9
           );
-          obstacleSprite.setStrokeStyle(2, 0x5c2e0a);
-          this.physics.world.enable(obstacleSprite);
-          obstacleSprite.body.setImmovable(true);
-          this.obstaclesGroup.add(obstacleSprite);
+          
+          // Add border
+          obstacleRect.setStrokeStyle(3, 0x5c2e0a, 1);
+          
+          // Add texture effect (simple lines)
+          const graphics = this.add.graphics();
+          graphics.lineStyle(1, 0x5c2e0a, 0.3);
+          
+          const lines = 5;
+          for (let i = 0; i < lines; i++) {
+            const yPos = obstacle.y - obstacle.height / 2 + (obstacle.height / lines) * i;
+            graphics.lineBetween(
+              obstacle.x - obstacle.width / 2,
+              yPos,
+              obstacle.x + obstacle.width / 2,
+              yPos
+            );
+          }
+          
+          graphics.setDepth(5);
+          obstacleRect.setDepth(5);
+          
+          // Create physics body
+          this.physics.world.enable(obstacleRect);
+          obstacleRect.body.setImmovable(true);
+          obstacleRect.body.moves = false;
+          
+          // Add to group
+          this.obstaclesGroup.add(obstacleRect);
+          
+          console.log(`[GameScene] Created obstacle ${index} at (${obstacle.x}, ${obstacle.y})`);
         } catch (error) {
           console.warn(`[GameScene] Failed to create obstacle ${index}:`, error);
         }
       });
-      console.log(`[GameScene] Created ${this.mapConfig.obstacles.length} obstacles`);
+      console.log(`[GameScene] Created ${this.mapConfig.obstacles.length} enhanced obstacles`);
     } catch (error) {
       console.error('[GameScene] Obstacle creation error:', error);
     }
@@ -607,98 +670,104 @@ class GameScene extends Phaser.Scene {
   }
 
   createPlayerSprite(playerData) {
-    const isLocal = playerData.id === window.networkManager?.socket?.id;
+  const isLocal = playerData.id === window.networkManager?.socket?.id;
+  
+  try {
+    const initialTexture = this.getPlayerTexture(playerData, 'front', 1);
     
-    try {
-      const initialTexture = this.getPlayerTexture(playerData, 'front', 1);
-      
-      const sprite = this.physics.add.sprite(0, 0, initialTexture);
-      sprite.setDisplaySize(
-        GAME_CONSTANTS.GAME_CONFIG.PLAYER_SIZE, 
-        GAME_CONSTANTS.GAME_CONFIG.PLAYER_SIZE
+    const sprite = this.physics.add.sprite(0, 0, initialTexture);
+    sprite.setDisplaySize(
+      GAME_CONSTANTS.GAME_CONFIG.PLAYER_SIZE, 
+      GAME_CONSTANTS.GAME_CONFIG.PLAYER_SIZE
+    );
+    
+    let glowCircle = null;
+    if (isLocal) {
+      glowCircle = this.add.circle(
+        0, 0, 
+        GAME_CONSTANTS.GAME_CONFIG.PLAYER_SIZE / 2 + 5, 
+        0xffff00, 0.3
       );
-      
-      let glowCircle = null;
-      if (isLocal) {
-        glowCircle = this.add.circle(
-          0, 0, 
-          GAME_CONSTANTS.GAME_CONFIG.PLAYER_SIZE / 2 + 5, 
-          0xffff00, 0.3
-        );
-        glowCircle.setStrokeStyle(2, 0xffff00, 1);
-      }
-      
-      const nameText = this.add.text(0, -25, playerData.username, {
-        fontSize: '14px', 
-        fill: isLocal ? '#ffff00' : '#ffffff',
-        stroke: '#000000', 
-        strokeThickness: 3, 
-        align: 'center',
-        fontStyle: isLocal ? 'bold' : 'normal'
-      }).setOrigin(0.5);
-      
-      const freezeText = this.add.text(0, 0, '', {
-        fontSize: '16px', 
-        fill: '#fff', 
-        stroke: '#000', 
-        strokeThickness: 3
-      }).setOrigin(0.5);
-      
-      const containerChildren = isLocal && glowCircle ? 
-        [glowCircle, sprite, nameText, freezeText] : 
-        [sprite, nameText, freezeText];
-      
-      const container = this.add.container(playerData.x, playerData.y, containerChildren);
-      container.setSize(
-        GAME_CONSTANTS.GAME_CONFIG.PLAYER_SIZE, 
-        GAME_CONSTANTS.GAME_CONFIG.PLAYER_SIZE
-      );
-      this.physics.world.enable(container);
-      container.body.setCollideWorldBounds(true);
-
-      if (this.obstaclesGroup) {
-        this.physics.add.collider(container, this.obstaclesGroup);
-      }
-      
-      container.sprite = sprite;
-      container.nameText = nameText;
-      container.freezeText = freezeText;
-      container.glowCircle = glowCircle;
-      container.playerData = playerData;
-      container.direction = 'front';
-      container.animFrame = 1;
-      container.animTimer = 0;
-      
-      const depth = this.gameMode === GAME_CONSTANTS.GAME_MODES.NIGHT ? 1002 : 10;
-      container.setDepth(depth);
-
-      if (this.gameMode === GAME_CONSTANTS.GAME_MODES.NIGHT) {
-        container.setVisible(isLocal);
-      }
-      
-      this.players.set(playerData.id, container);
-      
-      if (isLocal) {
-        this.cameras.main.startFollow(container, true, 0.1, 0.1);
-        this.cameras.main.setZoom(1);
-        
-        if (glowCircle) {
-          this.tweens.add({
-            targets: glowCircle,
-            alpha: { from: 0.3, to: 0.6 },
-            duration: 1000,
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.easeInOut'
-          });
-        }
-        
-        console.log(`[GameScene] Local player created: ${playerData.username}`);
-      }
-    } catch (error) {
-      console.error('[GameScene] Player sprite creation error:', error);
+      glowCircle.setStrokeStyle(2, 0xffff00, 1);
     }
+    
+    const nameText = this.add.text(0, -25, playerData.username, {
+      fontSize: '14px', 
+      fill: isLocal ? '#ffff00' : '#ffffff',
+      stroke: '#000000', 
+      strokeThickness: 3, 
+      align: 'center',
+      fontStyle: isLocal ? 'bold' : 'normal'
+    }).setOrigin(0.5);
+    
+    const freezeText = this.add.text(0, 0, '', {
+      fontSize: '16px', 
+      fill: '#fff', 
+      stroke: '#000', 
+      strokeThickness: 3
+    }).setOrigin(0.5);
+    
+    const containerChildren = isLocal && glowCircle ? 
+      [glowCircle, sprite, nameText, freezeText] : 
+      [sprite, nameText, freezeText];
+    
+    const container = this.add.container(playerData.x, playerData.y, containerChildren);
+    container.setSize(
+      GAME_CONSTANTS.GAME_CONFIG.PLAYER_SIZE, 
+      GAME_CONSTANTS.GAME_CONFIG.PLAYER_SIZE
+    );
+    this.physics.world.enable(container);
+    container.body.setCollideWorldBounds(true);
+    
+    // *** CRITICAL: Set up collision circle for better collision detection ***
+    container.body.setCircle(GAME_CONSTANTS.GAME_CONFIG.PLAYER_SIZE / 2);
+    container.body.setOffset(0, 0);
+
+    // *** CRITICAL: Add collider with obstacles ***
+    if (this.obstaclesGroup && this.obstaclesGroup.getChildren().length > 0) {
+      this.physics.add.collider(container, this.obstaclesGroup, null, null, this);
+      console.log(`[GameScene] Added obstacle collider for player: ${playerData.username}`);
+    }
+    
+    container.sprite = sprite;
+    container.nameText = nameText;
+    container.freezeText = freezeText;
+    container.glowCircle = glowCircle;
+    container.playerData = playerData;
+    container.direction = 'front';
+    container.animFrame = 1;
+    container.animTimer = 0;
+    
+    const depth = this.gameMode === GAME_CONSTANTS.GAME_MODES.NIGHT ? 1002 : 10;
+    container.setDepth(depth);
+
+    if (this.gameMode === GAME_CONSTANTS.GAME_MODES.NIGHT) {
+      container.setVisible(isLocal);
+    }
+    
+    this.players.set(playerData.id, container);
+    
+    if (isLocal) {
+      this.cameras.main.startFollow(container, true, 0.1, 0.1);
+      this.cameras.main.setZoom(1);
+      
+      if (glowCircle) {
+        this.tweens.add({
+          targets: glowCircle,
+          alpha: { from: 0.3, to: 0.6 },
+          duration: 1000,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut'
+        });
+      }
+      
+      console.log(`[GameScene] Local player created: ${playerData.username}`);
+    }
+  } catch (error) {
+    console.error('[GameScene] Player sprite creation error:', error);
   }
+}
 
   updatePlayerSprite(playerData) {
     const container = this.players.get(playerData.id);

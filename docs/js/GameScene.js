@@ -1,5 +1,6 @@
 // client/js/GameScene.js
 // PRODUCTION-READY: Fixed asset loading, AudioContext, and texture conflicts
+// *** FIXES APPLIED FOR OBSTACLES AND GAME RESET ***
 
 class GameScene extends Phaser.Scene {
   constructor() {
@@ -291,11 +292,21 @@ class GameScene extends Phaser.Scene {
       this.mapConfig = GAME_CONSTANTS.MAPS[mapKey] || GAME_CONSTANTS.MAPS.CLASSIC;
       this.gameMode = gameMode || GAME_CONSTANTS.GAME_MODES.DAY;
 
-      // Clear existing elements
-      this.children.removeAll();
+      // *** FIX: Clear existing game objects AND internal maps ***
+      // Clear Phaser game objects
+      this.children.removeAll(); 
+      // Explicitly destroy and clear player map
+      this.players.forEach(player => player.destroy());
+      this.players.clear();
+      // Explicitly destroy and clear powerup map
+      this.powerups.forEach(powerup => powerup.destroy());
+      this.powerups.clear();
+      
+      // Clear obstacle group
       if (this.obstaclesGroup) {
         this.obstaclesGroup.clear(true, true);
       }
+      // *** END FIX ***
 
       const width = this.mapConfig.width || 1600;
       const height = this.mapConfig.height || 800;
@@ -313,7 +324,7 @@ class GameScene extends Phaser.Scene {
 
       // Create obstacles
       if (this.mapConfig.obstacles && Array.isArray(this.mapConfig.obstacles)) {
-        this.createObstacles();
+        this.createObstacles(); // This will now call the fixed "enhanced" version
       }
 
       // Create bases
@@ -339,42 +350,8 @@ class GameScene extends Phaser.Scene {
     this.createBases();
   }
 
+  // *** FIX: Replaced the two obstacle functions with one fixed, enhanced version ***
   createObstacles() {
-  try {
-    this.mapConfig.obstacles.forEach((obstacle, index) => {
-      try {
-        // Create visual rectangle
-        const obstacleRect = this.add.rectangle(
-          obstacle.x, 
-          obstacle.y, 
-          obstacle.width, 
-          obstacle.height, 
-          0x8b4513, 
-          0.8
-        );
-        obstacleRect.setStrokeStyle(2, 0x5c2e0a);
-        obstacleRect.setDepth(5); // Above background, below players
-        
-        // Create physics body
-        this.physics.world.enable(obstacleRect);
-        obstacleRect.body.setImmovable(true);
-        obstacleRect.body.moves = false;
-        
-        // Add to group for easier collision management
-        this.obstaclesGroup.add(obstacleRect);
-        
-        console.log(`[GameScene] Created obstacle ${index} at (${obstacle.x}, ${obstacle.y})`);
-      } catch (error) {
-        console.warn(`[GameScene] Failed to create obstacle ${index}:`, error);
-      }
-    });
-    console.log(`[GameScene] Created ${this.mapConfig.obstacles.length} obstacles`);
-  } catch (error) {
-    console.error('[GameScene] Obstacle creation error:', error);
-  }
-  }
-
-  createObstaclesEnhanced() {
     try {
       this.mapConfig.obstacles.forEach((obstacle, index) => {
         try {
@@ -409,13 +386,16 @@ class GameScene extends Phaser.Scene {
           graphics.setDepth(5);
           obstacleRect.setDepth(5);
           
-          // Create physics body
-          this.physics.world.enable(obstacleRect);
+          // *** FIX: Correct physics initialization order ***
+          // 1. Add to group FIRST. This creates the static body.
+          this.obstaclesGroup.add(obstacleRect);
+          
+          // 2. Now we can access obstacleRect.body safely.
           obstacleRect.body.setImmovable(true);
           obstacleRect.body.moves = false;
           
-          // Add to group
-          this.obstaclesGroup.add(obstacleRect);
+          // 3. The conflicting physics.world.enable() line is removed.
+          // *** END FIX ***
           
           console.log(`[GameScene] Created obstacle ${index} at (${obstacle.x}, ${obstacle.y})`);
         } catch (error) {
@@ -423,10 +403,12 @@ class GameScene extends Phaser.Scene {
         }
       });
       console.log(`[GameScene] Created ${this.mapConfig.obstacles.length} enhanced obstacles`);
-    } catch (error) {
+    } catch (error)
+    {
       console.error('[GameScene] Obstacle creation error:', error);
     }
   }
+  // *** END FIX ***
 
   createBases() {
     const baseTextStyle = { 
@@ -844,8 +826,7 @@ class GameScene extends Phaser.Scene {
       }
       
       const movement = this.controls.getMovement();
-      const speed = GAME_CONSTANTS.GAME_CONFIG.PLAYER_SPEED * 
-                    (this.localPlayer.speedMultiplier || 1);
+      const speed = GAME_CONSTANTS.GAME_CONFIG.PLAYER_SPEED * (this.localPlayer.speedMultiplier || 1);
       
       localContainer.body.setVelocity(movement.x * speed, movement.y * speed);
 

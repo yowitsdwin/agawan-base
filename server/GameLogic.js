@@ -1,5 +1,6 @@
 // server/GameLogic.js
 // Fixed to work with dynamic map configurations
+// *** FIX: Store and clear endgame timeout ***
 
 const CONSTANTS = require('../shared/constants');
 
@@ -175,10 +176,19 @@ class GameLogic {
       playerStats: this.getPlayerStats()
     });
 
-    // Instead of cleaning up, reset to lobby after 10 seconds
-    setTimeout(() => {
-      this.room.resetToLobby();
+    // *** FIX: Clear any existing timeout and store the new one ***
+    if (this.room.resetLobbyTimeout) {
+      clearTimeout(this.room.resetLobbyTimeout);
+    }
+    
+    this.room.resetLobbyTimeout = setTimeout(() => {
+      // Check if room still exists (hasn't been cleaned up)
+      if (this.room) {
+        this.room.resetToLobby();
+        this.room.resetLobbyTimeout = null;
+      }
     }, 10000); // 10 seconds to view results
+    // *** END FIX ***
   }
 
   getPlayerStats() {

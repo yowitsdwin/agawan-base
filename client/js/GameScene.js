@@ -1,5 +1,5 @@
 // client/js/GameScene.js
-// PRODUCTION-READY: Enhanced game scene with fallback asset loading and error recovery
+// PRODUCTION-READY: Fixed asset loading, AudioContext, and texture conflicts
 
 class GameScene extends Phaser.Scene {
   constructor() {
@@ -14,8 +14,7 @@ class GameScene extends Phaser.Scene {
     this.flashlightGraphics = null;
     this.assetsLoaded = false;
     this.isInitialized = false;
-    this.assetLoadAttempts = 0;
-    this.maxLoadAttempts = 3;
+    this.fallbacksCreated = false;
   }
 
   preload() {
@@ -57,24 +56,18 @@ class GameScene extends Phaser.Scene {
     });
 
     this.load.on('loaderror', (file) => {
-      console.error('[GameScene] Failed to load:', file.key, file.src);
-      this.assetLoadAttempts++;
-      
-      if (this.assetLoadAttempts < this.maxLoadAttempts) {
-        console.log(`[GameScene] Retrying asset load (${this.assetLoadAttempts}/${this.maxLoadAttempts})...`);
-      }
+      console.warn('[GameScene] Failed to load:', file.key);
     });
 
-    // Try loading character sprites with error handling
-    this.loadCharacterSpritesWithFallback();
+    // Try loading character sprites
+    this.loadCharacterSprites();
     
-    // Create procedural textures as fallback
-    this.createFallbackTextures();
+    // Create procedural textures for powerups and effects
     this.createPowerupTextures();
     this.createEffectTextures();
   }
 
-  loadCharacterSpritesWithFallback() {
+  loadCharacterSprites() {
     const basePath = 'assets/';
     const sprites = [
       'red_back1', 'red_back2', 'red_front1', 'red_front2',
@@ -86,79 +79,10 @@ class GameScene extends Phaser.Scene {
     ];
 
     sprites.forEach(sprite => {
-      // Try loading with error suppression
-      try {
-        this.load.image(sprite, `${basePath}${sprite}.png`);
-      } catch (error) {
-        console.warn(`[GameScene] Could not queue load for ${sprite}`);
-      }
+      this.load.image(sprite, `${basePath}${sprite}.png`);
     });
 
     console.log('[GameScene] Queued character sprite loading');
-  }
-
-  createFallbackTextures() {
-    // Create fallback sprites for all characters
-    const teams = ['red', 'blue'];
-    const directions = ['front', 'back', 'left', 'right'];
-    const frames = [1, 2];
-    
-    teams.forEach(team => {
-      const color = team === 'red' ? 0xff4757 : 0x5352ed;
-      
-      directions.forEach(direction => {
-        frames.forEach(frame => {
-          const key = `${team}_${direction}${frame}`;
-          this.createPlayerFallback(key, color, direction);
-        });
-        
-        // Frozen state
-        const frozenKey = `frozen_${team}${direction}`;
-        this.createPlayerFallback(frozenKey, 0x74b9ff, direction, true);
-      });
-    });
-    
-    console.log('[GameScene] Created fallback textures');
-  }
-
-  createPlayerFallback(key, color, direction, frozen = false) {
-    const size = 32;
-    const graphics = this.make.graphics({ x: 0, y: 0, add: false });
-    
-    // Draw body
-    graphics.fillStyle(color);
-    graphics.fillCircle(size / 2, size / 2, size / 2 - 2);
-    
-    // Add direction indicator
-    graphics.fillStyle(0xffffff, 0.8);
-    let indicatorX = size / 2;
-    let indicatorY = size / 2;
-    
-    switch(direction) {
-      case 'front':
-        indicatorY = size * 0.7;
-        break;
-      case 'back':
-        indicatorY = size * 0.3;
-        break;
-      case 'left':
-        indicatorX = size * 0.3;
-        break;
-      case 'right':
-        indicatorX = size * 0.7;
-        break;
-    }
-    
-    graphics.fillCircle(indicatorX, indicatorY, size / 8);
-    
-    // Add frozen effect
-    if (frozen) {
-      graphics.lineStyle(2, 0x00d2ff, 0.8);
-      graphics.strokeCircle(size / 2, size / 2, size / 2 - 4);
-    }
-    
-    graphics.generateTexture(key, size, size);
-    graphics.destroy();
   }
 
   createPowerupTextures() {
@@ -210,6 +134,82 @@ class GameScene extends Phaser.Scene {
     console.log('[GameScene] Created effect textures');
   }
 
+  createFallbackTextures() {
+    if (this.fallbacksCreated) {
+      console.log('[GameScene] Fallbacks already created, skipping');
+      return;
+    }
+
+    console.log('[GameScene] Creating fallback textures for missing sprites');
+    
+    const teams = ['red', 'blue'];
+    const directions = ['front', 'back', 'left', 'right'];
+    const frames = [1, 2];
+    
+    teams.forEach(team => {
+      const color = team === 'red' ? 0xff4757 : 0x5352ed;
+      
+      directions.forEach(direction => {
+        frames.forEach(frame => {
+          const key = `${team}_${direction}${frame}`;
+          // Only create fallback if texture doesn't exist
+          if (!this.textures.exists(key)) {
+            this.createPlayerFallback(key, color, direction);
+          }
+        });
+        
+        // Frozen state
+        const frozenKey = `frozen_${team}${direction}`;
+        if (!this.textures.exists(frozenKey)) {
+          this.createPlayerFallback(frozenKey, 0x74b9ff, direction, true);
+        }
+      });
+    });
+    
+    this.fallbacksCreated = true;
+    console.log('[GameScene] Fallback textures created');
+  }
+
+  createPlayerFallback(key, color, direction, frozen = false) {
+    const size = 32;
+    const graphics = this.make.graphics({ x: 0, y: 0, add: false });
+    
+    // Draw body
+    graphics.fillStyle(color);
+    graphics.fillCircle(size / 2, size / 2, size / 2 - 2);
+    
+    // Add direction indicator
+    graphics.fillStyle(0xffffff, 0.8);
+    let indicatorX = size / 2;
+    let indicatorY = size / 2;
+    
+    switch(direction) {
+      case 'front':
+        indicatorY = size * 0.7;
+        break;
+      case 'back':
+        indicatorY = size * 0.3;
+        break;
+      case 'left':
+        indicatorX = size * 0.3;
+        break;
+      case 'right':
+        indicatorX = size * 0.7;
+        break;
+    }
+    
+    graphics.fillCircle(indicatorX, indicatorY, size / 8);
+    
+    // Add frozen effect
+    if (frozen) {
+      graphics.lineStyle(2, 0x00d2ff, 0.8);
+      graphics.strokeCircle(size / 2, size / 2, size / 2 - 4);
+    }
+    
+    graphics.generateTexture(key, size, size);
+    graphics.destroy();
+  }
+
   create() {
     console.log('[GameScene] Scene created');
     
@@ -220,6 +220,9 @@ class GameScene extends Phaser.Scene {
     }
 
     try {
+      // Create fallback textures AFTER assets are loaded
+      this.createFallbackTextures();
+      
       this.controls = new Controls(this);
       this.setupNetworkListeners();
       
@@ -264,7 +267,6 @@ class GameScene extends Phaser.Scene {
       if (window.uiManager) {
         window.uiManager.showActionFeedback('Error loading game. Using default map.', 'error');
       }
-      // Fallback to classic map
       this.initializeMap('classic', GAME_CONSTANTS.GAME_MODES.DAY);
     }
   }
@@ -295,7 +297,6 @@ class GameScene extends Phaser.Scene {
         this.obstaclesGroup.clear(true, true);
       }
 
-      // Set world bounds with safety checks
       const width = this.mapConfig.width || 1600;
       const height = this.mapConfig.height || 800;
       this.physics.world.setBounds(0, 0, width, height);
@@ -310,7 +311,7 @@ class GameScene extends Phaser.Scene {
       border.setOrigin(0);
       border.setStrokeStyle(10, 0xffffff, 0.5);
 
-      // Create obstacles with error handling
+      // Create obstacles
       if (this.mapConfig.obstacles && Array.isArray(this.mapConfig.obstacles)) {
         this.createObstacles();
       }
@@ -326,7 +327,6 @@ class GameScene extends Phaser.Scene {
       console.log('[GameScene] Map initialized successfully');
     } catch (error) {
       console.error('[GameScene] Map initialization error:', error);
-      // Create minimal safe map
       this.createFallbackMap();
     }
   }
@@ -803,7 +803,7 @@ class GameScene extends Phaser.Scene {
         this.localPlayer, localContainer.direction, localContainer.animFrame
       );
       if (this.textures.exists(newTexture)) {
-        container.sprite.setTexture(newTexture);
+        localContainer.sprite.setTexture(newTexture);
       }
 
       if (localContainer.body.velocity.lengthSq() > 0) {

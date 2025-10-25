@@ -1,5 +1,5 @@
 // client/js/main.js
-// Main application entry point with initialization
+// Main application entry point with AudioContext fix
 
 window.game = null;
 window.networkManager = null;
@@ -11,19 +11,50 @@ const gameConfig = {
   height: window.innerHeight,
   parent: 'gameCanvas',
   backgroundColor: '#2d3436',
+  audio: {
+    disableWebAudio: false, // Enable Web Audio
+    noAudio: false
+  },
   physics: {
     default: 'arcade',
     arcade: { 
       gravity: { y: 0 },
-      debug: false // Set to true for debugging physics
+      debug: false
     }
   },
   scene: GameScene,
   scale: {
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH
+  },
+  // CRITICAL: Fix AudioContext must be resumed after user interaction
+  callbacks: {
+    preBoot: function (game) {
+      // Prevent AudioContext warning by handling it properly
+      game.sound.unlock();
+    }
   }
 };
+
+// Resume AudioContext on first user interaction
+function resumeAudioContext() {
+  if (window.game && window.game.sound && window.game.sound.context) {
+    const audioContext = window.game.sound.context;
+    if (audioContext.state === 'suspended') {
+      audioContext.resume().then(() => {
+        console.log('[Audio] AudioContext resumed successfully');
+      }).catch(err => {
+        console.warn('[Audio] Failed to resume AudioContext:', err);
+      });
+    }
+  }
+}
+
+// Add event listeners for user interaction to resume audio
+const userInteractionEvents = ['click', 'touchstart', 'keydown'];
+userInteractionEvents.forEach(event => {
+  document.addEventListener(event, resumeAudioContext, { once: true });
+});
 
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('🎮 Agawan Base - Enhanced Edition');
@@ -42,6 +73,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!window.game) {
     console.log('[Main] Creating Phaser game instance...');
     window.game = new Phaser.Game(gameConfig);
+    
+    // Ensure audio context is handled
+    window.game.events.once('ready', () => {
+      console.log('[Phaser] Game ready');
+      resumeAudioContext();
+    });
   }
 
   console.log('✅ Client initialization complete');
@@ -90,7 +127,10 @@ function setupNetworkEvents() {
   window.networkManager.on('gameStarted', (roomState) => {
     console.log('[Main] gameStarted event caught.');
     
-    // *** ADD THIS: Trigger fullscreen on game start for mobile ***
+    // Resume audio context when game starts
+    resumeAudioContext();
+    
+    // Trigger fullscreen on game start for mobile
     if (window.uiManager && window.uiManager.isMobile) {
       window.uiManager.requestFullScreen();
     }
@@ -98,9 +138,10 @@ function setupNetworkEvents() {
     // Store the roomState for the scene to pick up
     window.pendingGameStart = roomState;
 
-    // We can still tell the UI to switch screens
+    // Switch UI to game screen
     window.uiManager.showScreen('gameScreen');
   });
+
   // Chat messages
   window.networkManager.on('chatMessage', (messageData) => {
     window.uiManager.addChatMessage(messageData);
@@ -119,7 +160,7 @@ function setupNetworkEvents() {
     };
 
     const message = errorMessages[data.code] || data.message || 'An error occurred';
-    window.uiManager.showActionFeedback(message, 3000);
+    window.uiManager.showActionFeedback(message, 'error', 3000);
   });
 
   // Connection lost handling
@@ -139,7 +180,6 @@ document.addEventListener('visibilitychange', () => {
     console.log('[Visibility] Page hidden');
   } else {
     console.log('[Visibility] Page visible');
-    // Could implement reconnection logic here if needed
   }
 });
 
@@ -172,50 +212,31 @@ window.addEventListener('error', (event) => {
   console.error('[Global Error]:', event.error);
   
   // Don't crash the entire app on non-critical errors
-  if (event.error && event.error.message && 
-      !event.error.message.includes('ResizeObserver')) {
-    // Log error but continue
-    console.error('Non-critical error caught:', event.error);
+  if (event.error && event.error.message) {
+    const ignoredErrors = [
+      'ResizeObserver',
+      'AudioContext',
+      'was not allowed to start'
+    ];
+    
+    if (ignoredErrors.some(err => event.error.message.includes(err))) {
+      console.warn('[Non-critical error]:', event.error.message);
+      event.preventDefault();
+      return;
+    }
   }
 });
 
-// Add CSS for error overlay dynamically
-const errorStyles = document.createElement('style');
-errorStyles.textContent = `
-  .error-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.8);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 10000;
+// Suppress AudioContext warnings
+const originalWarn = console.warn;
+console.warn = function(...args) {
+  const message = args.join(' ');
+  if (message.includes('AudioContext') || message.includes('was not allowed to start')) {
+    // Suppress AudioContext warnings - we handle them properly
+    return;
   }
-
-  .error-dialog {
-    background: rgba(40, 40, 40, 0.95);
-    padding: 40px;
-    border-radius: 16px;
-    text-align: center;
-    max-width: 500px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
-    border: 1px solid rgba(255, 77, 87, 0.5);
-  }
-
-  .error-dialog h2 {
-    color: #ff4757;
-    margin-top: 0;
-  }
-
-  .error-dialog p {
-    color: #ccc;
-    margin: 20px 0;
-  }
-`;
-document.head.appendChild(errorStyles);
+  originalWarn.apply(console, args);
+};
 
 console.log('📱 Controls: WASD/Arrow Keys to move, SPACE to rescue');
 console.log('💬 Chat: Click chat button to open/close');

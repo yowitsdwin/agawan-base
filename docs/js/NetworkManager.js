@@ -1,7 +1,10 @@
 // client/js/NetworkManager.js
-// FIXED: Enhanced network manager with better error handling and reliability
+// PRODUCTION-READY: Optimized network manager with robust error handling
 
 const LIVE_BACKEND_URL = "https://agawan-base-server.onrender.com";
+const CONNECTION_TIMEOUT = 10000;
+const PING_INTERVAL = 30000;
+const POSITION_UPDATE_THROTTLE = 50; // ms
 
 class NetworkManager {
   constructor() {
@@ -11,43 +14,67 @@ class NetworkManager {
     this.connectionPromise = null;
     this.currentLobbyId = null;
     this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 5;
+    this.maxReconnectAttempts = 3;
     this.pingInterval = null;
-    console.log('[NetworkManager] Initialized');
+    this.lastPositionUpdate = 0;
+    this.pendingMessages = [];
+    this.serverUrl = this.getServerUrl();
+    console.log('[NetworkManager] Initialized with server:', this.serverUrl);
+  }
+
+  getServerUrl() {
+    // Detect environment
+    const isGitHubPages = window.location.hostname.includes("github.io");
+    const isLocalhost = window.location.hostname === "localhost" || 
+                        window.location.hostname === "127.0.0.1";
+    
+    if (isGitHubPages) {
+      console.log('[Network] Running on GitHub Pages, using live backend');
+      return LIVE_BACKEND_URL;
+    }
+    
+    if (isLocalhost) {
+      console.log('[Network] Running locally');
+      return `http://${window.location.hostname}:3000`;
+    }
+    
+    // For other deployments (Vercel, Firebase, etc.)
+    console.log('[Network] Production deployment detected, using live backend');
+    return LIVE_BACKEND_URL;
   }
 
   async checkServerAvailability() {
-    const serverUrl = window.location.hostname.includes("github.io")
-      ? LIVE_BACKEND_URL
-      : `http://${window.location.hostname}:3000`;
-
-    console.log(`[Server Check] Checking: ${serverUrl}`);
+    console.log(`[Server Check] Testing: ${this.serverUrl}`);
 
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-      const response = await fetch(`${serverUrl}/api/server-status`, {
+      const response = await fetch(`${this.serverUrl}/api/server-status`, {
         method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        signal: controller.signal,
+        mode: 'cors'
       });
 
       clearTimeout(timeoutId);
 
       if (response.ok) {
         const data = await response.json();
-        console.log('[Server Check] Server available:', data);
+        console.log('[Server Check] ✓ Server available:', data);
         return { available: true, stats: data.stats };
       }
       
-      console.warn('[Server Check] Server returned non-OK status:', response.status);
+      console.warn('[Server Check] Server returned status:', response.status);
       return { available: false };
     } catch (error) {
       if (error.name === 'AbortError') {
-        console.error('[Server Check] Request timeout');
+        console.error('[Server Check] ✗ Request timeout (5s)');
       } else {
-        console.error('[Server Check] Failed:', error.message);
+        console.error('[Server Check] ✗ Failed:', error.message);
       }
       return { available: false };
     }
@@ -59,43 +86,41 @@ class NetworkManager {
       return this.connectionPromise;
     }
 
-    const serverUrl = window.location.hostname.includes("github.io")
-      ? LIVE_BACKEND_URL
-      : `http://${window.location.hostname}:3000`;
-
-    console.log(`[Socket] Connecting to: ${serverUrl}`);
+    console.log(`[Socket] Initiating connection to: ${this.serverUrl}`);
 
     this.connectionPromise = new Promise((resolve, reject) => {
       try {
-        this.socket = io(serverUrl, {
+        this.socket = io(this.serverUrl, {
           withCredentials: true,
-          transports: ['websocket'],
-          timeout: 10000,
+          transports: ['websocket', 'polling'], // Fallback to polling if needed
+          timeout: CONNECTION_TIMEOUT,
           forceNew: true,
-          reconnection: false // We handle reconnection manually
+          reconnection: false,
+          upgrade: true,
+          rememberUpgrade: true
         });
 
-        // Connection timeout
         const connectionTimeout = setTimeout(() => {
           if (!this.isConnected) {
-            console.error('[Socket] Connection timeout');
+            console.error('[Socket] ✗ Connection timeout');
             this.socket?.disconnect();
             this.connectionPromise = null;
-            reject(new Error('Connection timeout'));
+            reject(new Error('Connection timeout - server may be sleeping'));
           }
-        }, 10000);
+        }, CONNECTION_TIMEOUT);
 
         this.socket.on('connect', () => {
           clearTimeout(connectionTimeout);
-          console.log(`[Socket] Connected. ID: ${this.socket.id}`);
+          console.log(`[Socket] ✓ Connected! ID: ${this.socket.id}`);
           this.isConnected = true;
           this.reconnectAttempts = 0;
           this.startPingMonitoring();
+          this.processPendingMessages();
           resolve();
         });
 
         this.socket.on('disconnect', (reason) => {
-          console.warn(`[Socket] Disconnected. Reason: ${reason}`);
+          console.warn(`[Socket] Disconnected: ${reason}`);
           this.isConnected = false;
           this.connectionPromise = null;
           this.stopPingMonitoring();
@@ -104,12 +129,12 @@ class NetworkManager {
 
         this.socket.on('connect_error', (error) => {
           clearTimeout(connectionTimeout);
-          console.error(`[Socket] Connection error:`, error.message);
+          console.error(`[Socket] ✗ Connection error:`, error.message);
           this.connectionPromise = null;
           this.reconnectAttempts++;
           
           if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-            reject(new Error('Failed to connect after multiple attempts'));
+            reject(new Error('Failed to connect after multiple attempts. Server may be waking up - please try again in 30 seconds.'));
           } else {
             reject(error);
           }
@@ -121,7 +146,7 @@ class NetworkManager {
 
         this.setupEventHandlers();
       } catch (error) {
-        console.error('[Socket] Connection setup failed:', error);
+        console.error('[Socket] Setup failed:', error);
         this.connectionPromise = null;
         reject(error);
       }
@@ -131,18 +156,17 @@ class NetworkManager {
   }
 
   startPingMonitoring() {
-    // Monitor connection health
     this.pingInterval = setInterval(() => {
       if (this.socket && this.isConnected) {
         const start = Date.now();
         this.socket.emit('ping', () => {
           const latency = Date.now() - start;
           if (latency > 1000) {
-            console.warn(`[Socket] High latency detected: ${latency}ms`);
+            console.warn(`[Socket] High latency: ${latency}ms`);
           }
         });
       }
-    }, 30000); // Check every 30 seconds
+    }, PING_INTERVAL);
   }
 
   stopPingMonitoring() {
@@ -169,7 +193,6 @@ class NetworkManager {
     
     events.forEach(event => {
       this.socket.on(event, (data) => {
-        console.log(`[Network] Received: ${event}`);
         this.trigger(event, data);
       });
     });
@@ -196,22 +219,33 @@ class NetworkManager {
 
   emit(event, data) {
     if (!this.socket) {
-      console.error(`[Socket] Socket not initialized. Cannot emit '${event}'`);
+      console.error(`[Socket] Not initialized, queuing: ${event}`);
+      this.pendingMessages.push({ event, data });
       return false;
     }
 
     if (!this.isConnected) {
-      console.error(`[Socket] Not connected. Cannot emit '${event}'`);
+      console.error(`[Socket] Not connected, queuing: ${event}`);
+      this.pendingMessages.push({ event, data });
       return false;
     }
 
     try {
       this.socket.emit(event, data);
-      console.log(`[Network] Emitted: ${event}`);
       return true;
     } catch (error) {
       console.error(`[Socket] Error emitting '${event}':`, error);
       return false;
+    }
+  }
+
+  processPendingMessages() {
+    if (this.pendingMessages.length > 0) {
+      console.log(`[Socket] Processing ${this.pendingMessages.length} pending messages`);
+      this.pendingMessages.forEach(({ event, data }) => {
+        this.emit(event, data);
+      });
+      this.pendingMessages = [];
     }
   }
 
@@ -242,14 +276,14 @@ class NetworkManager {
           clearTimeout(timeout);
           this.socket.off('serverError', onError);
           this.currentLobbyId = data.lobbyId;
-          console.log(`[Lobby] Created successfully: ${data.lobbyId}`);
+          console.log(`[Lobby] ✓ Created: ${data.lobbyId}`);
           resolve(data);
         };
 
         const onError = (error) => {
           clearTimeout(timeout);
           this.socket.off('lobbyCreated', onCreated);
-          console.error('[Lobby] Create error:', error);
+          console.error('[Lobby] ✗ Create error:', error);
           reject(new Error(error.message || 'Failed to create lobby'));
         };
 
@@ -278,14 +312,14 @@ class NetworkManager {
           clearTimeout(timeout);
           this.socket.off('serverError', onError);
           this.currentLobbyId = data.lobbyId;
-          console.log(`[Lobby] Joined successfully: ${data.lobbyId}`);
+          console.log(`[Lobby] ✓ Joined: ${data.lobbyId}`);
           resolve(data);
         };
 
         const onError = (error) => {
           clearTimeout(timeout);
           this.socket.off('lobbyJoined', onJoined);
-          console.error('[Lobby] Join error:', error);
+          console.error('[Lobby] ✗ Join error:', error);
           reject(new Error(error.message || 'Failed to join lobby'));
         };
 
@@ -301,41 +335,40 @@ class NetworkManager {
   }
 
   updateLobbySettings(settings) {
-    console.log('[Lobby] Updating settings:', settings);
     return this.emit('updateLobbySettings', { settings });
   }
 
   async changeTeam() {
     await this.ensureConnected();
-    console.log('[Lobby] Changing team');
     return this.emit('changeTeam');
   }
 
   async playerReady() {
     await this.ensureConnected();
-    console.log('[Lobby] Toggling ready status');
     return this.emit('playerReady');
   }
 
   // ==================== GAME METHODS ====================
 
   updatePosition(x, y, direction) {
-    // Don't log every position update to reduce console spam
+    // Throttle position updates to reduce network traffic
+    const now = Date.now();
+    if (now - this.lastPositionUpdate < POSITION_UPDATE_THROTTLE) {
+      return false;
+    }
+    this.lastPositionUpdate = now;
     return this.emit('updatePosition', { x, y, direction });
   }
 
   sendChatMessage(message, type) {
-    console.log(`[Chat] Sending ${type} message`);
     return this.emit('chatMessage', { message, type });
   }
 
   rescuePlayer(targetId) {
-    console.log(`[Game] Attempting rescue: ${targetId}`);
     return this.emit('rescuePlayer', { targetId });
   }
 
   collectPowerup(powerupId, powerupType) {
-    console.log(`[Game] Collecting powerup: ${powerupType}`);
     return this.emit('collectPowerup', { powerupId, powerupType });
   }
 
@@ -344,7 +377,6 @@ class NetworkManager {
   handleDisconnect(reason) {
     console.error(`[Socket] Handling disconnect: ${reason}`);
     
-    // Pause the game
     if (window.game?.scene.isActive('GameScene')) {
       window.game.scene.pause('GameScene');
     }
@@ -361,7 +393,7 @@ class NetworkManager {
       const friendlyReason = friendlyReasons[reason] || reason;
       
       window.uiManager.showError(
-        `Lost connection to server: ${friendlyReason}. The page will reload to reconnect.`,
+        `Lost connection: ${friendlyReason}. Refreshing to reconnect...`,
         'Connection Lost',
         () => window.location.reload()
       );
@@ -381,21 +413,20 @@ class NetworkManager {
     this.connectionPromise = null;
     this.currentLobbyId = null;
     
-    console.log('[Socket] Disconnected successfully');
+    console.log('[Socket] Disconnected');
   }
 
   getLobbyId() {
     return this.currentLobbyId;
   }
 
-  // ==================== DEBUG METHODS ====================
-
   getConnectionStatus() {
     return {
       connected: this.isConnected,
       socketId: this.socket?.id,
       lobbyId: this.currentLobbyId,
-      reconnectAttempts: this.reconnectAttempts
+      reconnectAttempts: this.reconnectAttempts,
+      serverUrl: this.serverUrl
     };
   }
 

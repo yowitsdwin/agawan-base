@@ -3,27 +3,57 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="description" content="Agawan Base - Classic Filipino multiplayer game">
+    <meta name="theme-color" content="#2d3436">
     <title>🎮 Agawan Base - Multiplayer Game</title>
+    
+    <!-- Preconnect to external resources -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <link rel="preconnect" href="https://agawan-base-server.onrender.com" crossorigin>
+    
+    <!-- Preload critical resources -->
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" as="style">
+    <link rel="preload" href="style.css" as="style">
+    <link rel="preload" href="js/constants.js" as="script">
+    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js" as="script" crossorigin>
+    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.70.0/phaser.min.js" as="script" crossorigin>
+    
+    <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Styles -->
     <link rel="stylesheet" href="style.css">
+    
+    <!-- PWA Manifest (optional) -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- iOS Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Agawan Base">
 </head>
 <body>
     <div id="gameContainer">
+        <!-- Loading Screen -->
         <div id="loadingScreen" class="screen">
             <div class="screen-content">
                 <div class="loader"></div>
                 <h2>Connecting to Server...</h2>
                 <p id="loadingStatus">Checking server availability</p>
+                <p style="font-size: 0.8em; color: #888; margin-top: 20px;">
+                    ⏱️ First connection may take 30s if server is sleeping
+                </p>
             </div>
         </div>
 
+        <!-- Main Menu -->
         <div id="mainMenuScreen" class="screen hidden">
             <div class="screen-content">
                 <h1>🎮 Agawan Base</h1>
                 <p>A Classic Filipino Multiplayer Game</p>
-                <input type="text" id="usernameInput" placeholder="Enter your name" maxlength="20">
+                <input type="text" id="usernameInput" placeholder="Enter your name" maxlength="20" autocomplete="off">
                 <div class="menu-buttons">
                     <button id="hostGameBtn" class="primary-btn">Host Game</button>
                     <button id="joinGameBtn" class="secondary-btn">Join Game</button>
@@ -31,11 +61,13 @@
             </div>
         </div>
 
+        <!-- Join Lobby Screen -->
         <div id="joinLobbyScreen" class="screen hidden">
             <div class="screen-content">
                 <h1>Join Lobby</h1>
                 <p>Enter the lobby code to join</p>
-                <input type="text" id="lobbyCodeInput" placeholder="Enter 6-digit code" maxlength="6" style="text-transform: uppercase;">
+                <input type="text" id="lobbyCodeInput" placeholder="Enter 6-digit code" maxlength="6" 
+                       style="text-transform: uppercase;" autocomplete="off">
                 <div class="menu-buttons">
                     <button id="confirmJoinBtn" class="primary-btn">Join</button>
                     <button id="backToMenuBtn" class="secondary-btn">Back</button>
@@ -43,6 +75,7 @@
             </div>
         </div>
 
+        <!-- Host Settings Screen -->
         <div id="hostSettingsScreen" class="screen hidden">
             <div class="screen-content">
                 <h1>Host Game Settings</h1>
@@ -59,7 +92,7 @@
                 <div class="settings-group">
                     <label>Winning Score:</label>
                     <select id="winningScoreSelect">
-                        <option value="3">3 Points</option>
+                        <option value="3" selected>3 Points</option>
                         <option value="5">5 Points</option>
                         <option value="7">7 Points</option>
                         <option value="10">10 Points</option>
@@ -69,7 +102,7 @@
                 <div class="settings-group">
                     <label>Game Mode:</label>
                     <select id="gameModeSelect">
-                        <option value="day">Day Mode</option>
+                        <option value="day" selected>Day Mode</option>
                         <option value="night">Night Mode (Flashlight)</option>
                     </select>
                 </div>
@@ -81,6 +114,7 @@
             </div>
         </div>
 
+        <!-- Lobby Screen -->
         <div id="lobbyScreen" class="screen hidden">
             <div class="screen-content lobby-content">
                 <div class="lobby-header">
@@ -122,6 +156,7 @@
             </div>
         </div>
 
+        <!-- Game Screen -->
         <div id="gameScreen" class="screen hidden">
             <div id="gameUI">
                 <div id="scoreboard">
@@ -134,15 +169,16 @@
                         <span class="team-name">Blue</span>
                         <span class="score" id="blueScore">0</span>
                     </div>
-                    <button id="toggleLeaderboardBtn" class="icon-btn">🏆</button>
+                    <button id="toggleLeaderboardBtn" class="icon-btn" title="Toggle Leaderboard">🏆</button>
                 </div>
 
                 <div id="leaderboard" class="hidden">
                     <h3>Leaderboard</h3>
                     <div id="leaderboardContent"></div>
                 </div>
+                
                 <div id="chat-ui-container">
-                    <button id="chatToggleBtn" class="icon-btn">💬</button>
+                    <button id="chatToggleBtn" class="icon-btn" title="Toggle Chat">💬</button>
                     <div id="chatContainer" class="hidden">
                         <div id="chatMessages"></div>
                         <div id="chatInput">
@@ -150,16 +186,20 @@
                                 <option value="global">All</option>
                                 <option value="team">Team</option>
                             </select>
-                            <input type="text" id="messageInput" placeholder="Type..." maxlength="100">
+                            <input type="text" id="messageInput" placeholder="Type..." maxlength="100" autocomplete="off">
                             <button id="sendMessageBtn">Send</button>
                         </div>
                     </div>
                 </div>
             </div>
+            
             <div id="gameCanvas"></div>
             
+            <!-- Mobile Controls -->
             <div id="mobileControls" class="mobile-only">
-                <div id="joystick-container"><div id="joystick"></div></div>
+                <div id="joystick-container">
+                    <div id="joystick"></div>
+                </div>
                 <div id="flashlight-joystick-container">
                     <div id="flashlight-joystick"></div>
                 </div>
@@ -167,6 +207,7 @@
             </div>
         </div>
 
+        <!-- Game Over Screen -->
         <div id="gameOverScreen" class="screen hidden">
             <div class="screen-content">
                 <h1 id="gameOverTitle">Game Over!</h1>
@@ -179,20 +220,49 @@
         </div>
     </div>
 
+    <!-- Orientation Warning (Mobile) -->
     <div id="orientation-warning">
-      <div class="screen-content">
-        <h1>Agawan Base</h1>
-        <p>Please rotate your device to landscape mode to play.</p>
-      </div>
+        <div class="screen-content">
+            <h1>🎮 Agawan Base</h1>
+            <p>📱 Please rotate your device to landscape mode to play.</p>
+            <p style="font-size: 0.9em; margin-top: 20px; color: #aaa;">
+                This game requires landscape orientation for the best experience.
+            </p>
+        </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.70.0/phaser.min.js"></script>
+    <!-- Scripts - Load in correct order -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js" 
+            integrity="sha512-RJ8l1g/u0L8s8aexbqVP8bYxGZhwb7FKJJqZ4vJkGpiqknrWy8B6RA5W2KlYmVZ7g5F05e5q8kqCOjOgYXXKzA==" 
+            crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.70.0/phaser.min.js" 
+            integrity="sha512-BwRFD27mwSBOZrCMGVZQFnF6+wB5yKBxJBZIHYLH2fCj1TG+5RYWdQ5XBQv7BaFn7fxPdIxKKSWOA26n5bP5oA==" 
+            crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    
+    <!-- Game Scripts -->
     <script src="js/constants.js"></script>
     <script src="js/NetworkManager.js"></script>
     <script src="js/Controls.js"></script>
     <script src="js/UIManager.js"></script>
     <script src="js/GameScene.js"></script>
     <script src="js/main.js"></script>
+    
+    <!-- Error Handling -->
+    <script>
+        // Global error handler
+        window.addEventListener('error', function(e) {
+            console.error('💥 Global Error:', e.error);
+            if (e.error && e.error.message && e.error.message.includes('Script error')) {
+                console.warn('External script error - continuing...');
+                return;
+            }
+        });
+        
+        // Unhandled promise rejection handler
+        window.addEventListener('unhandledrejection', function(e) {
+            console.error('💥 Unhandled Promise:', e.reason);
+            e.preventDefault(); // Prevent console spam
+        });
+    </script>
 </body>
 </html>

@@ -14,7 +14,7 @@ const app = express();
 const server = http.createServer(app);
 
 const allowedOrigins = process.env.NODE_ENV === 'production'
-  ? ["https://yowitsdwin.github.io"]
+  ? ["https://yowitsdwin.github.io", "https://agawan-base.web.app", "https://agawan-base.firebaseapp.com"]
   : ["http://localhost:3000", "http://127.0.0.1:5500", "http://localhost:5500", "http://192.168.1.21:3000", "http://192.168.100.43:3000"];
 
 console.log("=================================");

@@ -7,27 +7,11 @@
     <meta name="theme-color" content="#2d3436">
     <title>🎮 Agawan Base - Multiplayer Game</title>
     
-    <!-- Preconnect to external resources -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-    <link rel="preconnect" href="https://agawan-base-server.onrender.com" crossorigin>
-    
-    <!-- Preload critical resources -->
-    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" as="style">
-    <link rel="preload" href="style.css" as="style">
-    <link rel="preload" href="js/constants.js" as="script">
-    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js" as="script" crossorigin>
-    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.70.0/phaser.min.js" as="script" crossorigin>
-    
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
     
     <!-- Styles -->
     <link rel="stylesheet" href="style.css">
-    
-    <!-- PWA Manifest (optional) -->
-    <link rel="manifest" href="manifest.json">
     
     <!-- iOS Meta Tags -->
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -225,19 +209,12 @@
         <div class="screen-content">
             <h1>🎮 Agawan Base</h1>
             <p>📱 Please rotate your device to landscape mode to play.</p>
-            <p style="font-size: 0.9em; margin-top: 20px; color: #aaa;">
-                This game requires landscape orientation for the best experience.
-            </p>
         </div>
     </div>
 
-    <!-- Scripts - Load in correct order -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js" 
-            integrity="sha512-RJ8l1g/u0L8s8aexbqVP8bYxGZhwb7FKJJqZ4vJkGpiqknrWy8B6RA5W2KlYmVZ7g5F05e5q8kqCOjOgYXXKzA==" 
-            crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.70.0/phaser.min.js" 
-            integrity="sha512-BwRFD27mwSBOZrCMGVZQFnF6+wB5yKBxJBZIHYLH2fCj1TG+5RYWdQ5XBQv7BaFn7fxPdIxKKSWOA26n5bP5oA==" 
-            crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <!-- Scripts - FIXED CDN URLs -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
     
     <!-- Game Scripts -->
     <script src="js/constants.js"></script>
@@ -246,23 +223,5 @@
     <script src="js/UIManager.js"></script>
     <script src="js/GameScene.js"></script>
     <script src="js/main.js"></script>
-    
-    <!-- Error Handling -->
-    <script>
-        // Global error handler
-        window.addEventListener('error', function(e) {
-            console.error('💥 Global Error:', e.error);
-            if (e.error && e.error.message && e.error.message.includes('Script error')) {
-                console.warn('External script error - continuing...');
-                return;
-            }
-        });
-        
-        // Unhandled promise rejection handler
-        window.addEventListener('unhandledrejection', function(e) {
-            console.error('💥 Unhandled Promise:', e.reason);
-            e.preventDefault(); // Prevent console spam
-        });
-    </script>
 </body>
 </html>

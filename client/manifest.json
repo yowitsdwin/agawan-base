@@ -1,0 +1,18 @@
+cat > client/manifest.json << 'EOF'
+{
+  "name": "Agawan Base",
+  "short_name": "Agawan Base",
+  "description": "Classic Filipino multiplayer game",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#2d3436",
+  "theme_color": "#5352ed",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
+EOF

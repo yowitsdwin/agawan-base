@@ -1,5 +1,5 @@
 // client/js/GameScene.js
-// Enhanced game scene with night mode and dynamic map support
+// FIXED: Enhanced game scene with proper asset loading and error handling
 
 class GameScene extends Phaser.Scene {
   constructor() {
@@ -12,64 +12,109 @@ class GameScene extends Phaser.Scene {
     this.gameMode = GAME_CONSTANTS.GAME_MODES.DAY;
     this.nightOverlay = null;
     this.flashlightGraphics = null;
+    this.assetsLoaded = false;
+    this.isInitialized = false;
   }
 
   preload() {
-    const { PLAYER_SIZE } = GAME_CONSTANTS.GAME_CONFIG;
+    console.log('[GameScene] Starting asset preload...');
+    
+    // Show loading progress
+    const progressBar = this.add.graphics();
+    const progressBox = this.add.graphics();
+    progressBox.fillStyle(0x222222, 0.8);
+    progressBox.fillRect(
+      this.cameras.main.width / 2 - 160,
+      this.cameras.main.height / 2 - 25,
+      320,
+      50
+    );
 
-    // Player sprites
-    this.loadCharacterSprites(PLAYER_SIZE);
-    
-    // Powerup sprites
-    Object.values(GAME_CONSTANTS.POWERUPS).forEach(powerup => {
-      this.add.graphics()
-        .fillStyle(this.getPowerupColor(powerup.id))
-        .fillCircle(16, 16, 16)
-        .generateTexture(powerup.id, 32, 32)
-        .destroy();
+    const loadingText = this.add.text(
+      this.cameras.main.width / 2,
+      this.cameras.main.height / 2 - 50,
+      'Loading Assets...',
+      { fontSize: '20px', fill: '#ffffff' }
+    ).setOrigin(0.5);
+
+    this.load.on('progress', (value) => {
+      progressBar.clear();
+      progressBar.fillStyle(0x5352ed, 1);
+      progressBar.fillRect(
+        this.cameras.main.width / 2 - 150,
+        this.cameras.main.height / 2 - 15,
+        300 * value,
+        30
+      );
     });
-    
-    // Effects
-    this.add.graphics().fillStyle(0xffffff).fillRect(0, 0, 8, 8)
-      .generateTexture('particle', 8, 8).destroy();
-    this.add.graphics().lineStyle(3, 0x0984e3, 0.8).strokeCircle(25, 25, 25)
-      .generateTexture('shieldEffect', 50, 50).destroy();
+
+    this.load.on('complete', () => {
+      console.log('[GameScene] All assets loaded successfully');
+      progressBar.destroy();
+      progressBox.destroy();
+      loadingText.destroy();
+      this.assetsLoaded = true;
+    });
+
+    this.load.on('loaderror', (file) => {
+      console.error('[GameScene] Failed to load asset:', file.key);
+    });
+
+    const { PLAYER_SIZE } = GAME_CONSTANTS.GAME_CONFIG;
+    this.loadCharacterSprites(PLAYER_SIZE);
+    this.createPowerupTextures();
+    this.createEffectTextures();
   }
 
   loadCharacterSprites() {
     const basePath = 'assets/';
+    const sprites = [
+      // Red team
+      'red_back1', 'red_back2', 'red_front1', 'red_front2',
+      'red_left1', 'red_left2', 'red_right1', 'red_right2',
+      // Blue team
+      'blue_back1', 'blue_back2', 'blue_front1', 'blue_front2',
+      'blue_left1', 'blue_left2', 'blue_right1', 'blue_right2',
+      // Frozen
+      'frozen_redback', 'frozen_redfront', 'frozen_redleft', 'frozen_redright',
+      'frozen_blueback', 'frozen_bluefront', 'frozen_blueleft', 'frozen_blueright'
+    ];
 
-    //Red team sprites
-    this.load.image('red_back1', basePath + 'red_back1.png');
-    this.load.image('red_back2', basePath + 'red_back2.png');
-    this.load.image('red_front1', basePath + 'red_front1.png');
-    this.load.image('red_front2', basePath + 'red_front2.png');
-    this.load.image('red_left1', basePath + 'red_left1.png');
-    this.load.image('red_left2', basePath + 'red_left2.png');
-    this.load.image('red_right1', basePath + 'red_right1.png');
-    this.load.image('red_right2', basePath + 'red_right2.png');
+    sprites.forEach(sprite => {
+      this.load.image(sprite, `${basePath}${sprite}.png`);
+    });
 
-    //Blue team sprites
-    this.load.image('blue_back1', basePath + 'blue_back1.png');
-    this.load.image('blue_back2', basePath + 'blue_back2.png');
-    this.load.image('blue_front1', basePath + 'blue_front1.png');
-    this.load.image('blue_front2', basePath + 'blue_front2.png');
-    this.load.image('blue_left1', basePath + 'blue_left1.png');
-    this.load.image('blue_left2', basePath + 'blue_left2.png');
-    this.load.image('blue_right1', basePath + 'blue_right1.png');
-    this.load.image('blue_right2', basePath + 'blue_right2.png');
+    console.log('[GameScene] Loaded character sprite definitions');
+  }
 
-    //Frozen sprites
-    this.load.image('frozen_redback', basePath + 'frozen_redback.png');
-    this.load.image('frozen_redfront', basePath + 'frozen_redfront.png');
-    this.load.image('frozen_redleft', basePath + 'frozen_redleft.png');
-    this.load.image('frozen_redright', basePath + 'frozen_redright.png');
+  createPowerupTextures() {
+    // Create powerup textures as graphics (fallback if images fail)
+    Object.values(GAME_CONSTANTS.POWERUPS).forEach(powerup => {
+      const graphics = this.add.graphics();
+      graphics.fillStyle(this.getPowerupColor(powerup.id));
+      graphics.fillCircle(16, 16, 16);
+      graphics.generateTexture(powerup.id, 32, 32);
+      graphics.destroy();
+    });
+    console.log('[GameScene] Created powerup textures');
+  }
 
-    this.load.image('frozen_blueback', basePath + 'frozen_blueback.png');
-    this.load.image('frozen_bluefront', basePath + 'frozen_bluefront.png');
-    this.load.image('frozen_blueleft', basePath + 'frozen_blueleft.png');
-    this.load.image('frozen_blueright', basePath + 'frozen_blueright.png');
+  createEffectTextures() {
+    // Particle texture
+    const particle = this.add.graphics();
+    particle.fillStyle(0xffffff);
+    particle.fillRect(0, 0, 8, 8);
+    particle.generateTexture('particle', 8, 8);
+    particle.destroy();
 
+    // Shield effect
+    const shield = this.add.graphics();
+    shield.lineStyle(3, 0x0984e3, 0.8);
+    shield.strokeCircle(25, 25, 25);
+    shield.generateTexture('shieldEffect', 50, 50);
+    shield.destroy();
+
+    console.log('[GameScene] Created effect textures');
   }
 
   getPowerupColor(powerupId) {
@@ -82,57 +127,73 @@ class GameScene extends Phaser.Scene {
   }
 
   create() {
+    console.log('[GameScene] Scene created');
+    
+    if (!this.assetsLoaded) {
+      console.warn('[GameScene] Assets not fully loaded yet, waiting...');
+      this.time.delayedCall(100, () => this.create());
+      return;
+    }
+
     this.controls = new Controls(this);
-    this.setupNetworkListeners(); // This is already here
+    this.setupNetworkListeners();
     
     this.time.addEvent({ 
       delay: 16, 
       callback: this.gameLoop, 
       callbackScope: this, 
       loop: true 
-    }); // This is already here
+    });
     
-    // *** ADD THIS CHECK AT THE END OF create() ***
-    // Check if the gameStarted event fired before this scene was ready
+    // Check for pending game start
     if (window.pendingGameStart) {
-      console.log('[GameScene] Found pending game start, initializing...');
-      
-      // Manually trigger the start-game logic
+      console.log('[GameScene] Processing pending game start');
       const roomState = window.pendingGameStart;
-      this.initializeMap(roomState.settings.map, roomState.settings.gameMode);
-      this.updateGameState(roomState);
-      
-      // Clear the pending state so it doesn't run twice
+      this.initializeGame(roomState);
       window.pendingGameStart = null;
     }
+
+    this.isInitialized = true;
+    console.log('[GameScene] Initialization complete');
+  }
+
+  initializeGame(roomState) {
+    if (!roomState || !roomState.settings) {
+      console.error('[GameScene] Invalid room state');
+      return;
+    }
+
+    this.initializeMap(roomState.settings.map, roomState.settings.gameMode);
+    this.updateGameState(roomState);
   }
 
   pauseKeyboard() {
-    // Stops Phaser from capturing all keyboard events
     if (this.input && this.input.keyboard) {
       this.input.keyboard.disableGlobalCapture();
     }
   }
 
   resumeKeyboard() {
-    // Allows Phaser to capture keyboard events again
     if (this.input && this.input.keyboard) {
       this.input.keyboard.enableGlobalCapture();
     }
   }
 
   initializeMap(mapId, gameMode) {
+    console.log(`[GameScene] Initializing map: ${mapId}, mode: ${gameMode}`);
+    
     const mapKey = mapId.toUpperCase();
     this.mapConfig = GAME_CONSTANTS.MAPS[mapKey] || GAME_CONSTANTS.MAPS.CLASSIC;
     this.gameMode = gameMode || GAME_CONSTANTS.GAME_MODES.DAY;
 
-    // Clear existing map elements
+    // Clear existing elements
     this.children.removeAll();
+    if (this.obstaclesGroup) {
+      this.obstaclesGroup.clear(true, true);
+    }
 
     // Set world bounds
     this.physics.world.setBounds(0, 0, this.mapConfig.width, this.mapConfig.height);
-
-    // *** ADD THIS LINE ***
     this.obstaclesGroup = this.physics.add.staticGroup();
 
     // Create background
@@ -149,7 +210,7 @@ class GameScene extends Phaser.Scene {
       .setOrigin(0)
       .setStrokeStyle(10, 0xffffff, 0.5);
 
-    // Create obstacles if any
+    // Create obstacles
     if (this.mapConfig.obstacles && this.mapConfig.obstacles.length > 0) {
       this.createObstacles();
     }
@@ -157,10 +218,12 @@ class GameScene extends Phaser.Scene {
     // Create bases
     this.createBases();
 
-    // Setup night mode if needed
+    // Setup night mode
     if (this.gameMode === GAME_CONSTANTS.GAME_MODES.NIGHT) {
       this.setupNightMode();
     }
+
+    console.log('[GameScene] Map initialized successfully');
   }
 
   createObstacles() {
@@ -174,8 +237,11 @@ class GameScene extends Phaser.Scene {
         0.8
       );
       obstacleSprite.setStrokeStyle(2, 0x5c2e0a);
+      this.physics.world.enable(obstacleSprite);
+      obstacleSprite.body.setImmovable(true);
       this.obstaclesGroup.add(obstacleSprite);
     });
+    console.log(`[GameScene] Created ${this.mapConfig.obstacles.length} obstacles`);
   }
 
   createBases() {
@@ -222,23 +288,20 @@ class GameScene extends Phaser.Scene {
     ).setOrigin(0.5);
     blueBaseText.setDepth(3);
 
-    console.log(`[GameScene] Bases created at Red:(${this.mapConfig.redBase.x},${this.mapConfig.redBase.y}) Blue:(${this.mapConfig.blueBase.x},${this.mapConfig.blueBase.y})`);
+    console.log('[GameScene] Bases created');
   }
 
   setupNightMode() {
-    // Create dark overlay (85% opacity black)
     this.nightOverlay = this.add.rectangle(
       0, 0, 
       this.mapConfig.width, 
       this.mapConfig.height, 
       0x000000, 
-      0.85 // Dim, not solid black
+      0.85
     ).setOrigin(0).setDepth(1000);
 
-    // Create flashlight graphics (it's just a visual effect now)
     this.flashlightGraphics = this.add.graphics().setDepth(1001);
-    
-    // No mask code is needed
+    console.log('[GameScene] Night mode enabled');
   }
 
   updateFlashlight() {
@@ -252,12 +315,11 @@ class GameScene extends Phaser.Scene {
 
     this.flashlightGraphics.clear();
 
-    // Get aim direction from controls
     const direction = this.controls.getFlashlightDirection();
     const flashlightAngle = Math.atan2(direction.y, direction.x);
 
-    // --- 1. Draw the visual flashlight cone ---
-    this.flashlightGraphics.fillStyle(0xffffff, 0.3); // 30% opacity white cone
+    // Draw flashlight cone
+    this.flashlightGraphics.fillStyle(0xffffff, 0.3);
     this.flashlightGraphics.beginPath();
     this.flashlightGraphics.moveTo(localContainer.x, localContainer.y);
     
@@ -275,71 +337,68 @@ class GameScene extends Phaser.Scene {
     this.flashlightGraphics.closePath();
     this.flashlightGraphics.fillPath();
 
-    // Add central bright spot (ambient visibility)
-    this.flashlightGraphics.fillStyle(0xffffff, 0.2); // 20% opacity white circle
+    // Ambient circle
+    this.flashlightGraphics.fillStyle(0xffffff, 0.2);
     this.flashlightGraphics.fillCircle(
       localContainer.x, 
       localContainer.y, 
       GAME_CONSTANTS.GAME_CONFIG.NIGHT_VISION_RADIUS
     );
 
-    // --- 2. Check visibility for other entities ---
+    // Update visibility
     const ambientRadius = GAME_CONSTANTS.GAME_CONFIG.NIGHT_VISION_RADIUS;
 
-    // Check players
     this.players.forEach((playerContainer, id) => {
-      // Skip the local player (always visible)
       if (id === this.localPlayer.id) return;
       
-      const isVisible = this.isTargetInLight(localContainer, playerContainer, flashlightAngle, angleSpread, distance, ambientRadius);
+      const isVisible = this.isTargetInLight(
+        localContainer, playerContainer, flashlightAngle, 
+        angleSpread, distance, ambientRadius
+      );
       playerContainer.setVisible(isVisible);
     });
     
-    // Check powerups
     this.powerups.forEach((powerupSprite) => {
-      const isVisible = this.isTargetInLight(localContainer, powerupSprite, flashlightAngle, angleSpread, distance, ambientRadius);
+      const isVisible = this.isTargetInLight(
+        localContainer, powerupSprite, flashlightAngle, 
+        angleSpread, distance, ambientRadius
+      );
       powerupSprite.setVisible(isVisible);
     });
   }
 
   isTargetInLight(localContainer, target, flashlightAngle, angleSpread, coneDistance, ambientRadius) {
-    const dist = Phaser.Math.Distance.Between(localContainer.x, localContainer.y, target.x, target.y);
+    const dist = Phaser.Math.Distance.Between(
+      localContainer.x, localContainer.y, target.x, target.y
+    );
 
-    // 1. Check if it's in the ambient "close" radius
-    if (dist < ambientRadius) {
-      return true;
-    }
+    if (dist < ambientRadius) return true;
+    if (dist > coneDistance) return false;
 
-    // 2. Check if it's too far for the main cone
-    if (dist > coneDistance) {
-      return false;
-    }
-
-    // 3. Check if it's within the flashlight cone angle
-    const angleToTarget = Phaser.Math.Angle.Between(localContainer.x, localContainer.y, target.x, target.y);
+    const angleToTarget = Phaser.Math.Angle.Between(
+      localContainer.x, localContainer.y, target.x, target.y
+    );
     const angleDiff = Phaser.Math.Angle.Wrap(angleToTarget - flashlightAngle);
 
-    if (Math.abs(angleDiff) < angleSpread) {
-      return true;
-    }
-
-    // Not in ambient or cone
-    return false;
+    return Math.abs(angleDiff) < angleSpread;
   }
 
   setupNetworkListeners() {
-    if (!window.networkManager) return;
+    if (!window.networkManager) {
+      console.error('[GameScene] NetworkManager not available');
+      return;
+    }
 
     window.networkManager.on('gameStarted', (roomState) => {
-      // *** REMOVE THIS LINE ***
-      window.uiManager.showScreen('gameScreen');
+      console.log('[GameScene] Game started event received');
       
-      // Clear the pending state...
-      if (window.pendingGameStart) { // (This is from a previous fix)
-        window.pendingGameStart = null;
+      if (!this.isInitialized) {
+        console.log('[GameScene] Scene not ready, storing pending start');
+        window.pendingGameStart = roomState;
+        return;
       }
-      this.initializeMap(roomState.settings.map, roomState.settings.gameMode);
-      this.updateGameState(roomState);
+
+      this.initializeGame(roomState);
     });
 
     window.networkManager.on('roomStateUpdate', (roomState) => {
@@ -361,13 +420,14 @@ class GameScene extends Phaser.Scene {
       this.removePowerup(data.powerupId));
     
     window.networkManager.on('gameOver', (data) => {
+      console.log('[GameScene] Game over received:', data);
       window.uiManager.showGameOver(data);
     });
   }
 
   updateGameState(roomState) {
     if (!roomState || !this.mapConfig) {
-      console.warn('[GameScene] Cannot update game state - missing data');
+      console.warn('[GameScene] Cannot update - missing data');
       return;
     }
     
@@ -375,12 +435,12 @@ class GameScene extends Phaser.Scene {
       p => p.id === window.networkManager.socket.id
     );
 
-    if (this.localPlayer) {
-      console.log(`[GameScene] Local player found: ${this.localPlayer.username} at (${this.localPlayer.x}, ${this.localPlayer.y})`);
-    } else {
-      console.warn('[GameScene] Local player not found in room state');
+    if (!this.localPlayer) {
+      console.warn('[GameScene] Local player not found');
+      return;
     }
 
+    // Remove disconnected players
     const serverPlayerIds = new Set(roomState.players.map(p => p.id));
     this.players.forEach((container, id) => {
       if (!serverPlayerIds.has(id)) {
@@ -388,15 +448,16 @@ class GameScene extends Phaser.Scene {
       }
     });
 
+    // Update or create player sprites
     roomState.players.forEach(playerData => {
       if (!this.players.has(playerData.id)) {
-        console.log(`[GameScene] Creating sprite for player: ${playerData.username}`);
         this.createPlayerSprite(playerData);
       } else {
         this.updatePlayerSprite(playerData);
       }
     });
 
+    // Update powerups
     const serverPowerupIds = new Set(roomState.powerups.map(p => p.id));
     this.powerups.forEach((sprite, id) => {
       if (!serverPowerupIds.has(id)) {
@@ -405,22 +466,36 @@ class GameScene extends Phaser.Scene {
     });
     
     roomState.powerups.forEach(p => this.spawnPowerup(p));
-    
-    console.log(`[GameScene] Game state updated. Players: ${this.players.size}, Powerups: ${this.powerups.size}`);
   }
 
   createPlayerSprite(playerData) {
     const isLocal = playerData.id === window.networkManager?.socket?.id;
     
-    // Get initial texture
+    // Verify texture exists
     const initialTexture = this.getPlayerTexture(playerData, 'front', 1);
+    if (!this.textures.exists(initialTexture)) {
+      console.warn(`[GameScene] Texture ${initialTexture} not found, using fallback`);
+      // Create fallback texture
+      const fallback = this.add.graphics();
+      fallback.fillStyle(playerData.team === 'red' ? 0xff4757 : 0x5352ed);
+      fallback.fillCircle(16, 16, 16);
+      fallback.generateTexture(initialTexture, 32, 32);
+      fallback.destroy();
+    }
+
     const sprite = this.physics.add.sprite(0, 0, initialTexture);
-    sprite.setDisplaySize(GAME_CONSTANTS.GAME_CONFIG.PLAYER_SIZE, GAME_CONSTANTS.GAME_CONFIG.PLAYER_SIZE);
+    sprite.setDisplaySize(
+      GAME_CONSTANTS.GAME_CONFIG.PLAYER_SIZE, 
+      GAME_CONSTANTS.GAME_CONFIG.PLAYER_SIZE
+    );
     
-    // Create a glow effect for local player
     let glowCircle = null;
     if (isLocal) {
-      glowCircle = this.add.circle(0, 0, GAME_CONSTANTS.GAME_CONFIG.PLAYER_SIZE / 2 + 5, 0xffff00, 0.3);
+      glowCircle = this.add.circle(
+        0, 0, 
+        GAME_CONSTANTS.GAME_CONFIG.PLAYER_SIZE / 2 + 5, 
+        0xffff00, 0.3
+      );
       glowCircle.setStrokeStyle(2, 0xffff00, 1);
     }
     
@@ -440,48 +515,45 @@ class GameScene extends Phaser.Scene {
       strokeThickness: 3
     }).setOrigin(0.5);
     
-    // Build container children array
     const containerChildren = isLocal && glowCircle ? 
       [glowCircle, sprite, nameText, freezeText] : 
       [sprite, nameText, freezeText];
     
     const container = this.add.container(playerData.x, playerData.y, containerChildren);
-    
-    container.setSize(GAME_CONSTANTS.GAME_CONFIG.PLAYER_SIZE, GAME_CONSTANTS.GAME_CONFIG.PLAYER_SIZE);
+    container.setSize(
+      GAME_CONSTANTS.GAME_CONFIG.PLAYER_SIZE, 
+      GAME_CONSTANTS.GAME_CONFIG.PLAYER_SIZE
+    );
     this.physics.world.enable(container);
     container.body.setCollideWorldBounds(true);
 
-    // *** ADD THIS LINE to make the player collide with obstacles ***
-    this.physics.add.collider(container, this.obstaclesGroup);
+    // Add collision with obstacles
+    if (this.obstaclesGroup) {
+      this.physics.add.collider(container, this.obstaclesGroup);
+    }
     
     container.sprite = sprite;
     container.nameText = nameText;
     container.freezeText = freezeText;
     container.glowCircle = glowCircle;
     container.playerData = playerData;
-
-    // *** ADD ANIMATION STATE ***
     container.direction = 'front';
     container.animFrame = 1;
     container.animTimer = 0;
     
-    // Set depth based on night mode
     const depth = this.gameMode === GAME_CONSTANTS.GAME_MODES.NIGHT ? 1002 : 10;
     container.setDepth(depth);
 
     if (this.gameMode === GAME_CONSTANTS.GAME_MODES.NIGHT) {
-      // Hide all players by default, except the local one
       container.setVisible(isLocal);
     }
     
     this.players.set(playerData.id, container);
     
     if (isLocal) {
-      // Follow camera immediately and set zoom
       this.cameras.main.startFollow(container, true, 0.1, 0.1);
       this.cameras.main.setZoom(1);
       
-      // Add pulsing animation to glow
       if (glowCircle) {
         this.tweens.add({
           targets: glowCircle,
@@ -493,7 +565,7 @@ class GameScene extends Phaser.Scene {
         });
       }
       
-      console.log(`[GameScene] Local player created at (${playerData.x}, ${playerData.y})`);
+      console.log(`[GameScene] Local player created: ${playerData.username}`);
     }
   }
 
@@ -502,26 +574,26 @@ class GameScene extends Phaser.Scene {
     if (!container) return;
 
     container.playerData = playerData;
-    // Update direction from server data
-    container.direction = playerData.direction || 'front'; 
+    container.direction = playerData.direction || 'front';
 
-    // Get correct texture (handling remote player animation)
     let textureKey;
     if (playerData.state === GAME_CONSTANTS.PLAYER_STATES.FROZEN) {
-        textureKey = this.getPlayerTexture(playerData, container.direction, 1);
+      textureKey = this.getPlayerTexture(playerData, container.direction, 1);
     } else {
-        // Simple 2-frame animation for remote players based on position change
-        if (container.x !== playerData.x || container.y !== playerData.y) {
-            container.animTimer++;
-            if (container.animTimer > 10) {
-                container.animFrame = container.animFrame === 1 ? 2 : 1;
-                container.animTimer = 0;
-            }
+      if (container.x !== playerData.x || container.y !== playerData.y) {
+        container.animTimer++;
+        if (container.animTimer > 10) {
+          container.animFrame = container.animFrame === 1 ? 2 : 1;
+          container.animTimer = 0;
         }
-        textureKey = this.getPlayerTexture(playerData, container.direction, container.animFrame);
+      }
+      textureKey = this.getPlayerTexture(playerData, container.direction, container.animFrame);
     }
-    container.sprite.setTexture(textureKey);
 
+    // Verify texture before setting
+    if (this.textures.exists(textureKey)) {
+      container.sprite.setTexture(textureKey);
+    }
 
     if (playerData.id !== this.localPlayer?.id) {
       this.tweens.add({
@@ -548,16 +620,16 @@ class GameScene extends Phaser.Scene {
     if (container) {
       container.destroy();
       this.players.delete(playerId);
+      console.log(`[GameScene] Removed player: ${playerId}`);
     }
   }
 
   gameLoop() {
-    if (!this.localPlayer || !this.mapConfig) return;
+    if (!this.localPlayer || !this.mapConfig || !this.isInitialized) return;
     
     const localContainer = this.players.get(this.localPlayer.id);
     if (!localContainer) return;
 
-    // Update flashlight in night mode
     if (this.gameMode === GAME_CONSTANTS.GAME_MODES.NIGHT) {
       this.updateFlashlight();
     }
@@ -568,7 +640,8 @@ class GameScene extends Phaser.Scene {
     }
     
     const movement = this.controls.getMovement();
-    const speed = GAME_CONSTANTS.GAME_CONFIG.PLAYER_SPEED * (this.localPlayer.speedMultiplier || 1);
+    const speed = GAME_CONSTANTS.GAME_CONFIG.PLAYER_SPEED * 
+                  (this.localPlayer.speedMultiplier || 1);
     
     localContainer.body.setVelocity(movement.x * speed, movement.y * speed);
 
@@ -581,23 +654,27 @@ class GameScene extends Phaser.Scene {
     let isMoving = movement.x !== 0 || movement.y !== 0;
     
     if (isMoving) {
-        localContainer.animTimer++;
-        if (localContainer.animTimer > 8) { // Animation speed
-            localContainer.animFrame = localContainer.animFrame === 1 ? 2 : 1;
-            localContainer.animTimer = 0;
-        }
+      localContainer.animTimer++;
+      if (localContainer.animTimer > 8) {
+        localContainer.animFrame = localContainer.animFrame === 1 ? 2 : 1;
+        localContainer.animTimer = 0;
+      }
     } else {
-        localContainer.animFrame = 1; // Idle frame
+      localContainer.animFrame = 1;
     }
     localContainer.direction = newDirection;
     
-    // Update local sprite texture immediately
-    const newTexture = this.getPlayerTexture(this.localPlayer, localContainer.direction, localContainer.animFrame);
-    localContainer.sprite.setTexture(newTexture);
+    const newTexture = this.getPlayerTexture(
+      this.localPlayer, localContainer.direction, localContainer.animFrame
+    );
+    if (this.textures.exists(newTexture)) {
+      localContainer.sprite.setTexture(newTexture);
+    }
 
-    // Send position AND direction to server
     if (localContainer.body.velocity.lengthSq() > 0) {
-      window.networkManager?.updatePosition(localContainer.x, localContainer.y, localContainer.direction);
+      window.networkManager?.updatePosition(
+        localContainer.x, localContainer.y, localContainer.direction
+      );
     }
     
     this.physics.overlap(
@@ -617,13 +694,10 @@ class GameScene extends Phaser.Scene {
     const state = playerData.state;
 
     if (state === GAME_CONSTANTS.PLAYER_STATES.FROZEN) {
-        // Frozen sprites don't have frames
-        const key = `frozen_${team}${direction}`;
-        // Fallback in case texture doesn't exist
-        return this.textures.exists(key) ? key : `frozen_${team}front`;
+      const key = `frozen_${team}${direction}`;
+      return this.textures.exists(key) ? key : `frozen_${team}front`;
     }
     
-    // Active player
     const key = `${team}_${direction}${frame}`;
     return this.textures.exists(key) ? key : `${team}_front1`;
   }

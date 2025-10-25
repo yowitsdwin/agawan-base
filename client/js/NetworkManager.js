@@ -1,5 +1,5 @@
 // client/js/NetworkManager.js
-// Enhanced network manager with lobby system support
+// FIXED: Enhanced network manager with better error handling and reliability
 
 const LIVE_BACKEND_URL = "https://agawan-base-server.onrender.com";
 
@@ -12,6 +12,8 @@ class NetworkManager {
     this.currentLobbyId = null;
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
+    this.pingInterval = null;
+    console.log('[NetworkManager] Initialized');
   }
 
   async checkServerAvailability() {
@@ -19,25 +21,41 @@ class NetworkManager {
       ? LIVE_BACKEND_URL
       : `http://${window.location.hostname}:3000`;
 
+    console.log(`[Server Check] Checking: ${serverUrl}`);
+
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
       const response = await fetch(`${serverUrl}/api/server-status`, {
         method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       if (response.ok) {
         const data = await response.json();
+        console.log('[Server Check] Server available:', data);
         return { available: true, stats: data.stats };
       }
+      
+      console.warn('[Server Check] Server returned non-OK status:', response.status);
       return { available: false };
     } catch (error) {
-      console.error('[Server Check] Failed:', error);
+      if (error.name === 'AbortError') {
+        console.error('[Server Check] Request timeout');
+      } else {
+        console.error('[Server Check] Failed:', error.message);
+      }
       return { available: false };
     }
   }
 
   connect() {
     if (this.connectionPromise) {
+      console.log('[Socket] Connection already in progress');
       return this.connectionPromise;
     }
 
@@ -48,48 +66,98 @@ class NetworkManager {
     console.log(`[Socket] Connecting to: ${serverUrl}`);
 
     this.connectionPromise = new Promise((resolve, reject) => {
-      this.socket = io(serverUrl, {
-        withCredentials: true,
-        transports: ['websocket'],
-        timeout: 10000,
-        forceNew: true
-      });
+      try {
+        this.socket = io(serverUrl, {
+          withCredentials: true,
+          transports: ['websocket'],
+          timeout: 10000,
+          forceNew: true,
+          reconnection: false // We handle reconnection manually
+        });
 
-      this.socket.on('connect', () => {
-        console.log(`[Socket] Connected. ID: ${this.socket.id}`);
-        this.isConnected = true;
-        this.reconnectAttempts = 0;
-        resolve();
-      });
+        // Connection timeout
+        const connectionTimeout = setTimeout(() => {
+          if (!this.isConnected) {
+            console.error('[Socket] Connection timeout');
+            this.socket?.disconnect();
+            this.connectionPromise = null;
+            reject(new Error('Connection timeout'));
+          }
+        }, 10000);
 
-      this.socket.on('disconnect', (reason) => {
-        console.warn(`[Socket] Disconnected. Reason: ${reason}`);
-        this.isConnected = false;
+        this.socket.on('connect', () => {
+          clearTimeout(connectionTimeout);
+          console.log(`[Socket] Connected. ID: ${this.socket.id}`);
+          this.isConnected = true;
+          this.reconnectAttempts = 0;
+          this.startPingMonitoring();
+          resolve();
+        });
+
+        this.socket.on('disconnect', (reason) => {
+          console.warn(`[Socket] Disconnected. Reason: ${reason}`);
+          this.isConnected = false;
+          this.connectionPromise = null;
+          this.stopPingMonitoring();
+          this.handleDisconnect(reason);
+        });
+
+        this.socket.on('connect_error', (error) => {
+          clearTimeout(connectionTimeout);
+          console.error(`[Socket] Connection error:`, error.message);
+          this.connectionPromise = null;
+          this.reconnectAttempts++;
+          
+          if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+            reject(new Error('Failed to connect after multiple attempts'));
+          } else {
+            reject(error);
+          }
+        });
+
+        this.socket.on('error', (error) => {
+          console.error('[Socket] Socket error:', error);
+        });
+
+        this.setupEventHandlers();
+      } catch (error) {
+        console.error('[Socket] Connection setup failed:', error);
         this.connectionPromise = null;
-        
-        // The server has disconnected us. Show the error and stop the game.
-        this.handleDisconnect(reason);
-      });
-
-      this.socket.on('connect_error', (error) => {
-        console.error(`[Socket] Connection failed:`, error.message);
-        this.connectionPromise = null;
-        this.reconnectAttempts++;
-        
-        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-          reject(new Error('Failed to connect after multiple attempts'));
-        } else {
-          reject(error);
-        }
-      });
-
-      this.setupEventHandlers();
+        reject(error);
+      }
     });
 
     return this.connectionPromise;
   }
 
+  startPingMonitoring() {
+    // Monitor connection health
+    this.pingInterval = setInterval(() => {
+      if (this.socket && this.isConnected) {
+        const start = Date.now();
+        this.socket.emit('ping', () => {
+          const latency = Date.now() - start;
+          if (latency > 1000) {
+            console.warn(`[Socket] High latency detected: ${latency}ms`);
+          }
+        });
+      }
+    }, 30000); // Check every 30 seconds
+  }
+
+  stopPingMonitoring() {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+  }
+
   setupEventHandlers() {
+    if (!this.socket) {
+      console.error('[Socket] Cannot setup handlers - socket not initialized');
+      return;
+    }
+
     const events = [
       'lobbyCreated', 'lobbyJoined', 'lobbySettingsChanged',
       'hostChanged', 'playerJoined', 'playerLeft',
@@ -101,6 +169,7 @@ class NetworkManager {
     
     events.forEach(event => {
       this.socket.on(event, (data) => {
+        console.log(`[Network] Received: ${event}`);
         this.trigger(event, data);
       });
     });
@@ -115,20 +184,40 @@ class NetworkManager {
 
   trigger(event, data) {
     if (this.callbacks.has(event)) {
-      this.callbacks.get(event).forEach(callback => callback(data));
+      this.callbacks.get(event).forEach(callback => {
+        try {
+          callback(data);
+        } catch (error) {
+          console.error(`[Network] Error in ${event} callback:`, error);
+        }
+      });
     }
   }
 
   emit(event, data) {
-    if (this.socket && this.isConnected) {
-      this.socket.emit(event, data);
-    } else {
+    if (!this.socket) {
+      console.error(`[Socket] Socket not initialized. Cannot emit '${event}'`);
+      return false;
+    }
+
+    if (!this.isConnected) {
       console.error(`[Socket] Not connected. Cannot emit '${event}'`);
+      return false;
+    }
+
+    try {
+      this.socket.emit(event, data);
+      console.log(`[Network] Emitted: ${event}`);
+      return true;
+    } catch (error) {
+      console.error(`[Socket] Error emitting '${event}':`, error);
+      return false;
     }
   }
 
   async ensureConnected() {
     if (!this.isConnected) {
+      console.log('[Socket] Not connected, attempting to connect...');
       if (this.connectionPromise) {
         await this.connectionPromise;
       } else {
@@ -140,94 +229,139 @@ class NetworkManager {
   // ==================== LOBBY METHODS ====================
 
   async createLobby(username, settings) {
-    await this.ensureConnected();
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error('Create lobby timeout'));
-      }, 5000);
+    try {
+      await this.ensureConnected();
+      
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          console.error('[Lobby] Create timeout');
+          reject(new Error('Create lobby request timed out'));
+        }, 5000);
 
-      this.socket.once('lobbyCreated', (data) => {
-        clearTimeout(timeout);
-        this.currentLobbyId = data.lobbyId;
-        resolve(data);
+        const onCreated = (data) => {
+          clearTimeout(timeout);
+          this.socket.off('serverError', onError);
+          this.currentLobbyId = data.lobbyId;
+          console.log(`[Lobby] Created successfully: ${data.lobbyId}`);
+          resolve(data);
+        };
+
+        const onError = (error) => {
+          clearTimeout(timeout);
+          this.socket.off('lobbyCreated', onCreated);
+          console.error('[Lobby] Create error:', error);
+          reject(new Error(error.message || 'Failed to create lobby'));
+        };
+
+        this.socket.once('lobbyCreated', onCreated);
+        this.socket.once('serverError', onError);
+
+        this.emit('createLobby', { username, settings });
       });
-
-      this.socket.once('serverError', (error) => {
-        clearTimeout(timeout);
-        reject(new Error(error.message));
-      });
-
-      this.emit('createLobby', { username, settings });
-    });
+    } catch (error) {
+      console.error('[Lobby] Create failed:', error);
+      throw error;
+    }
   }
 
   async joinLobby(username, lobbyId) {
-    await this.ensureConnected();
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error('Join lobby timeout'));
-      }, 5000);
+    try {
+      await this.ensureConnected();
+      
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          console.error('[Lobby] Join timeout');
+          reject(new Error('Join lobby request timed out'));
+        }, 5000);
 
-      this.socket.once('lobbyJoined', (data) => {
-        clearTimeout(timeout);
-        this.currentLobbyId = data.lobbyId;
-        resolve(data);
+        const onJoined = (data) => {
+          clearTimeout(timeout);
+          this.socket.off('serverError', onError);
+          this.currentLobbyId = data.lobbyId;
+          console.log(`[Lobby] Joined successfully: ${data.lobbyId}`);
+          resolve(data);
+        };
+
+        const onError = (error) => {
+          clearTimeout(timeout);
+          this.socket.off('lobbyJoined', onJoined);
+          console.error('[Lobby] Join error:', error);
+          reject(new Error(error.message || 'Failed to join lobby'));
+        };
+
+        this.socket.once('lobbyJoined', onJoined);
+        this.socket.once('serverError', onError);
+
+        this.emit('joinLobby', { username, lobbyId });
       });
-
-      this.socket.once('serverError', (error) => {
-        clearTimeout(timeout);
-        reject(new Error(error.message));
-      });
-
-      this.emit('joinLobby', { username, lobbyId });
-    });
+    } catch (error) {
+      console.error('[Lobby] Join failed:', error);
+      throw error;
+    }
   }
 
   updateLobbySettings(settings) {
-    this.emit('updateLobbySettings', { settings });
+    console.log('[Lobby] Updating settings:', settings);
+    return this.emit('updateLobbySettings', { settings });
   }
 
   async changeTeam() {
     await this.ensureConnected();
-    this.emit('changeTeam');
+    console.log('[Lobby] Changing team');
+    return this.emit('changeTeam');
   }
 
   async playerReady() {
     await this.ensureConnected();
-    this.emit('playerReady');
+    console.log('[Lobby] Toggling ready status');
+    return this.emit('playerReady');
   }
 
   // ==================== GAME METHODS ====================
 
-  updatePosition(x, y) {
-    this.emit('updatePosition', { x, y });
+  updatePosition(x, y, direction) {
+    // Don't log every position update to reduce console spam
+    return this.emit('updatePosition', { x, y, direction });
   }
 
   sendChatMessage(message, type) {
-    this.emit('chatMessage', { message, type });
+    console.log(`[Chat] Sending ${type} message`);
+    return this.emit('chatMessage', { message, type });
   }
 
   rescuePlayer(targetId) {
-    this.emit('rescuePlayer', { targetId });
+    console.log(`[Game] Attempting rescue: ${targetId}`);
+    return this.emit('rescuePlayer', { targetId });
   }
 
   collectPowerup(powerupId, powerupType) {
-    this.emit('collectPowerup', { powerupId, powerupType });
+    console.log(`[Game] Collecting powerup: ${powerupType}`);
+    return this.emit('collectPowerup', { powerupId, powerupType });
   }
 
   // ==================== UTILITY METHODS ====================
 
   handleDisconnect(reason) {
-    // Pause the game to stop the console spam and player movement
-    if (window.game && window.game.scene.isActive('GameScene')) {
+    console.error(`[Socket] Handling disconnect: ${reason}`);
+    
+    // Pause the game
+    if (window.game?.scene.isActive('GameScene')) {
       window.game.scene.pause('GameScene');
     }
 
     if (window.uiManager) {
-      // Provide a more user-friendly message
-      const message = `Lost connection to the server. Reason: ${reason}. The page will reload.`;
+      const friendlyReasons = {
+        'transport close': 'Connection lost',
+        'transport error': 'Network error',
+        'ping timeout': 'Connection timeout',
+        'io server disconnect': 'Server disconnected',
+        'io client disconnect': 'Disconnected'
+      };
+
+      const friendlyReason = friendlyReasons[reason] || reason;
+      
       window.uiManager.showError(
-        message,
+        `Lost connection to server: ${friendlyReason}. The page will reload to reconnect.`,
         'Connection Lost',
         () => window.location.reload()
       );
@@ -235,15 +369,37 @@ class NetworkManager {
   }
 
   disconnect() {
+    console.log('[Socket] Disconnecting...');
+    this.stopPingMonitoring();
+    
     if (this.socket) {
       this.socket.disconnect();
-      this.isConnected = false;
-      this.connectionPromise = null;
-      this.currentLobbyId = null;
+      this.socket = null;
     }
+    
+    this.isConnected = false;
+    this.connectionPromise = null;
+    this.currentLobbyId = null;
+    
+    console.log('[Socket] Disconnected successfully');
   }
 
   getLobbyId() {
     return this.currentLobbyId;
+  }
+
+  // ==================== DEBUG METHODS ====================
+
+  getConnectionStatus() {
+    return {
+      connected: this.isConnected,
+      socketId: this.socket?.id,
+      lobbyId: this.currentLobbyId,
+      reconnectAttempts: this.reconnectAttempts
+    };
+  }
+
+  logStatus() {
+    console.log('[NetworkManager] Status:', this.getConnectionStatus());
   }
 }
